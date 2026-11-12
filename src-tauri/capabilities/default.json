@@ -1,0 +1,6 @@
+{
+  "identifier": "main-window",
+  "description": "Local window events and user-requested closing; no network or filesystem IPC plugins.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-destroy"]
+}

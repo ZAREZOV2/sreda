@@ -1,0 +1,41 @@
+[package]
+name = "sreda-kanban"
+version = "0.2.0"
+description = "Local Kanban board"
+edition = "2021"
+license = "GPL-3.0-or-later"
+rust-version = "1.90"
+
+[lib]
+name = "sreda_kanban_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "sreda-kanban"
+path = "src/main.rs"
+
+[features]
+default = ["desktop"]
+desktop = ["dep:tauri", "dep:rfd", "dep:tauri-build"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [], optional = true }
+
+[dependencies]
+tauri = { version = "2", features = [], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.38", features = ["bundled"] }
+rfd = { version = "0.15", optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net"] }
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["limit"] }
+futures-util = "0.3"
+tokio-tungstenite = "0.26"
+rand = "0.8"
+subtle = "2"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4", "serde"] }
+ngrok = "0.16"
+http = "1"
+url = "2"

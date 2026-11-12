@@ -1,0 +1,11 @@
+/* Локальные шрифты «Среды» — без сети. Лицензия: SIL OFL 1.1 (см. OFL-*.txt). */
+@font-face {
+  font-family: "Golos Text";
+  src: url("./GolosText-Variable.woff2") format("woff2-variations"), url("./GolosText-Variable.woff2") format("woff2");
+  font-weight: 400 900; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./JetBrainsMono-Variable.woff2") format("woff2-variations"), url("./JetBrainsMono-Variable.woff2") format("woff2");
+  font-weight: 100 800; font-style: normal; font-display: swap;
+}

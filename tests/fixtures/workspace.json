@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "boards": [
+    {
+      "id": "ed234420-8baf-4b88-89f8-50a672f98266",
+      "name": "Пример · Разработка приложения",
+      "description": "Учебная доска с примерами. Эти задачи можно свободно изменить или удалить.",
+      "columns": [
+        {
+          "id": "62956e84-6deb-43ab-af67-52282f6e8d06",
+          "name": "В работе",
+          "tasks": [
+            {
+              "id": "86bda704-041e-4351-83c7-8d4aaea1879a",
+              "title": "Собрать основной экран доски",
+              "description": "Найти баланс между плотностью и спокойным интерфейсом.",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "high"
+            },
+            {
+              "id": "c57d590a-a96d-46df-98de-86bd70958839",
+              "title": "Настроить оболочку Tauri",
+              "description": "Размер окна и сборка под Windows.",
+              "label": "Разработка",
+              "color": "blue",
+              "priority": "medium"
+            },
+            {
+              "id": "09a20bf4-3dd4-432a-a284-3d589ffde281",
+              "title": "Подобрать набор иконок",
+              "description": "",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "low"
+            },
+            {
+              "id": "f2611800-709c-44d7-bc37-692b0d4bc66d",
+              "title": "Изменённая задача · контракт",
+              "description": "Текст с кириллицей\nВторая строка",
+              "label": "Интерфейс",
+              "color": "rose",
+              "priority": "low"
+            }
+          ]
+        },
+        {
+          "id": "872e3aba-06bf-4d39-91d7-b1848a6628af",
+          "name": "Нужно сделать",
+          "tasks": [
+            {
+              "id": "c742d82d-68f3-4fd1-a3fa-92f7dcfe27aa",
+              "title": "Добавить горячие клавиши",
+              "description": "Быстрое создание задачи и переход к поиску.",
+              "label": "Удобство",
+              "color": "amber",
+              "priority": "medium"
+            },
+            {
+              "id": "eb49342f-da37-4113-8c06-816def3b9454",
+              "title": "Схема локальных данных",
+              "description": "Доски, колонки и стабильные идентификаторы.",
+              "label": "Разработка",
+              "color": "blue",
+              "priority": "medium"
+            },
+            {
+              "id": "77112a3f-4969-4e6e-9f43-98e25c080f7a",
+              "title": "Проверить состояния фокуса",
+              "description": "",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "low"
+            }
+          ]
+        },
+        {
+          "id": "2a80f9ff-99eb-4e9f-8f83-30f1237885f2",
+          "name": "Готово",
+          "tasks": [
+            {
+              "id": "81bb3aa8-475c-4a9b-bb91-fbd2d96300b7",
+              "title": "Определить сценарий локальной работы",
+              "description": "Одна доска, понятные статусы, всё под рукой.",
+              "label": "Планирование",
+              "color": "gray",
+              "priority": "medium"
+            },
+            {
+              "id": "ae8da5ef-bab9-4cb5-8fe1-f9a6db13a8df",
+              "title": "Выбрать технологический стек",
+              "description": "Rust · Tauri · React · SQLite",
+              "label": "Разработка",
+              "color": "blue",
+              "priority": "medium"
+            },
+            {
+              "id": "8c452647-5b23-4b07-bdf2-62c4afff4e6c",
+              "title": "Зафиксировать визуальное направление",
+              "description": "",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "low"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "22a7a5b1-09ce-42b5-9c32-f68f994c1427",
+      "name": "Копия после импорта",
+      "description": "Учебная доска с примерами. Эти задачи можно свободно изменить или удалить.",
+      "columns": [
+        {
+          "id": "82662996-05e5-48cc-84ad-472dc7514721",
+          "name": "В работе",
+          "tasks": [
+            {
+              "id": "2927962a-6495-47df-b070-31b9302ea700",
+              "title": "Собрать основной экран доски",
+              "description": "Найти баланс между плотностью и спокойным интерфейсом.",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "high"
+            },
+            {
+              "id": "15535629-0a80-45f9-8e80-5975a791e96e",
+              "title": "Настроить оболочку Tauri",
+              "description": "Размер окна и сборка под Windows.",
+              "label": "Разработка",
+              "color": "blue",
+              "priority": "medium"
+            },
+            {
+              "id": "1d394622-428f-46be-a562-5ca20062e35c",
+              "title": "Подобрать набор иконок",
+              "description": "",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "low"
+            },
+            {
+              "id": "fd86b2e7-46a4-4dac-8711-f215f5380abb",
+              "title": "Изменённая задача · контракт",
+              "description": "Текст с кириллицей\nВторая строка",
+              "label": "Интерфейс",
+              "color": "rose",
+              "priority": "low"
+            }
+          ]
+        },
+        {
+          "id": "1b5e902f-9d82-4b9a-a06d-dc1e8322fb61",
+          "name": "Нужно сделать",
+          "tasks": [
+            {
+              "id": "58505580-5499-4c3c-b0ec-011f028742d2",
+              "title": "Добавить горячие клавиши",
+              "description": "Быстрое создание задачи и переход к поиску.",
+              "label": "Удобство",
+              "color": "amber",
+              "priority": "medium"
+            },
+            {
+              "id": "56120e0f-76b7-4481-aedd-611947a58103",
+              "title": "Схема локальных данных",
+              "description": "Доски, колонки и стабильные идентификаторы.",
+              "label": "Разработка",
+              "color": "blue",
+              "priority": "medium"
+            },
+            {
+              "id": "8d9a0d86-d3cf-4c4e-a969-39b53f322ba7",
+              "title": "Проверить состояния фокуса",
+              "description": "",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "low"
+            }
+          ]
+        },
+        {
+          "id": "6d9b166a-d338-4021-a16e-8989099b97e8",
+          "name": "Готово",
+          "tasks": [
+            {
+              "id": "16bc42b9-83a0-44d5-be86-2f0626e861e2",
+              "title": "Определить сценарий локальной работы",
+              "description": "Одна доска, понятные статусы, всё под рукой.",
+              "label": "Планирование",
+              "color": "gray",
+              "priority": "medium"
+            },
+            {
+              "id": "bd1d8ff8-ddb0-4d2e-b118-c0742e1fbe26",
+              "title": "Выбрать технологический стек",
+              "description": "Rust · Tauri · React · SQLite",
+              "label": "Разработка",
+              "color": "blue",
+              "priority": "medium"
+            },
+            {
+              "id": "81e832ef-8463-4501-8133-f2fe4ef609b5",
+              "title": "Зафиксировать визуальное направление",
+              "description": "",
+              "label": "Интерфейс",
+              "color": "sage",
+              "priority": "low"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "52265b89-581f-4b94-89b8-9e12913d51d5",
+      "name": "Пустая доска",
+      "description": "",
+      "columns": [
+        {
+          "id": "2805b2c9-f7dc-4298-a26d-0080fb8788f5",
+          "name": "Нужно сделать",
+          "tasks": []
+        },
+        {
+          "id": "782b6d58-820c-40c0-90d0-be795474ac78",
+          "name": "В работе",
+          "tasks": []
+        },
+        {
+          "id": "b5a5cd2f-eb5e-42f6-8ec0-bd5d26477a1a",
+          "name": "Готово",
+          "tasks": []
+        }
+      ]
+    }
+  ],
+  "selectedBoardId": "ed234420-8baf-4b88-89f8-50a672f98266"
+}
