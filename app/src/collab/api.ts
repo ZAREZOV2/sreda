@@ -91,10 +91,16 @@ export async function saveGuestSessions(sessions: GuestBoard[]): Promise<void> {
   await invoke("guest_sessions_save", { sessions });
 }
 
+export async function shareTheme(theme: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("collab_share_theme", { theme });
+}
+
 export async function listenHostEvents(handlers: {
   onState?: (payload: { snapshot: Snapshot; originId: string }) => void;
   onPresence?: (participants: Participant[]) => void;
   onStopped?: () => void;
+  onTheme?: (theme: string) => void;
 }): Promise<() => void> {
   if (!isTauri()) return () => {};
   const stops: UnlistenFn[] = [];
@@ -114,6 +120,12 @@ export async function listenHostEvents(handlers: {
   if (handlers.onStopped)
     stops.push(
       await listen("collab://stopped", () => handlers.onStopped?.()),
+    );
+  if (handlers.onTheme)
+    stops.push(
+      await listen<{ theme: string }>("collab://theme", (event) =>
+        handlers.onTheme?.(event.payload.theme),
+      ),
     );
   return () => {
     for (const stop of stops) stop();

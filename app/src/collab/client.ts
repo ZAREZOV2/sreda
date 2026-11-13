@@ -136,6 +136,8 @@ export class CollabClient {
           type: "disconnected",
           error: String(message.message ?? "Ошибка узла"),
         };
+      case "theme":
+        return { type: "theme", theme: String(message.theme ?? "") };
       default:
         return { type: "disconnected" };
     }

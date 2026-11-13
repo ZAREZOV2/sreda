@@ -37,12 +37,17 @@ import {
   type Profile,
 } from "./profile";
 import notices from "../THIRD-PARTY-NOTICES.txt?raw";
+import { McpSettings } from "./settings/McpSettings";
+import { ThemeEditor } from "./settings/ThemeEditor";
+import { UpdatesPanel } from "./settings/UpdatesPanel";
 
 export type SettingsSection =
   | "profile"
   | "appearance"
   | "collab"
+  | "ai"
   | "data"
+  | "updates"
   | "about";
 
 function onOpenAutoFocus(event: Event) {
@@ -63,7 +68,9 @@ const nav: {
   { id: "profile", label: "Профиль", icon: User },
   { id: "appearance", label: "Оформление", icon: Palette },
   { id: "collab", label: "Совместная работа", icon: Share2 },
+  { id: "ai", label: "ИИ / MCP", icon: Sparkles },
   { id: "data", label: "Данные", icon: Database },
+  { id: "updates", label: "Обновления", icon: Download },
   { id: "about", label: "О программе", icon: Info },
 ];
 
@@ -86,6 +93,7 @@ export function SettingsDialog({
   onExportBackup,
   onImportBackup,
   onOpenNgrokDashboard,
+  onShareTheme,
   busy,
 }: {
   open: boolean;
@@ -106,6 +114,7 @@ export function SettingsDialog({
   onExportBackup: () => Promise<void> | void;
   onImportBackup: () => Promise<void> | void;
   onOpenNgrokDashboard: () => Promise<void> | void;
+  onShareTheme?: () => Promise<void> | void;
   busy?: boolean;
 }) {
   const [draft, setDraft] = useState(profile.displayName);
@@ -180,18 +189,6 @@ export function SettingsDialog({
                 </button>
               );
             })}
-            <button
-              type="button"
-              className="settings-nav-item is-soon"
-              disabled
-              title="Локальный MCP-сервер для досок и документов — раздел 3 плана"
-            >
-              <Sparkles size={15} aria-hidden />
-              <span>
-                AI и MCP
-                <small>скоро</small>
-              </span>
-            </button>
           </aside>
           <div className="settings-main">
             <div className="settings-main-head">
@@ -203,7 +200,11 @@ export function SettingsDialog({
                 {section === "collab" &&
                   "Токен и домен ngrok нужны, чтобы открыть доступ к доске через интернет. Те же значения использует панель «Поделиться»."}
                 {section === "data" &&
-                  "Доски хранятся только на этом компьютере. Резервная копия забирает все доски в один файл."}
+                  "Доски и документы хранятся только на этом компьютере. Резервная копия забирает их в один файл."}
+                {section === "ai" &&
+                  "Локальный MCP-сервер для ИИ-клиентов. По умолчанию выключен и только для чтения."}
+                {section === "updates" &&
+                  "Что изменилось в «Среде». Сверху — последняя версия."}
                 {section === "about" &&
                   "Среда — локальные канбан-доски с совместной работой по ссылке."}
               </Dialog.Description>
@@ -293,8 +294,18 @@ export function SettingsDialog({
                     onSelect={onSelectTheme}
                     embedded
                   />
+                  <ThemeEditor currentKey={themeKey} onCreated={onSelectTheme} />
+                  {onShareTheme && (
+                    <div className="settings-actions">
+                      <Button type="button" variant="outline" onClick={() => void onShareTheme()}>
+                        Поделиться темой с участниками
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
+              {section === "ai" && <McpSettings />}
+              {section === "updates" && <UpdatesPanel />}
               {section === "collab" && (
                 <>
                   <label className="field">

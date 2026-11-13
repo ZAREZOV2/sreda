@@ -382,6 +382,12 @@ async fn collab_host_start(
                 HostEvent::Presence { participants } => {
                     let _ = emitter.emit("collab://presence", participants);
                 }
+                HostEvent::Theme { theme, origin_id } => {
+                    let _ = emitter.emit(
+                        "collab://theme",
+                        serde_json::json!({ "theme": theme, "originId": origin_id }),
+                    );
+                }
                 HostEvent::Stopped => {
                     let _ = emitter.emit("collab://stopped", ());
                     break;
@@ -624,6 +630,8 @@ fn ui_prefs_set(app: AppHandle, prefs: serde_json::Value) -> Result<(), String> 
     .map_err(|e| e.to_string())
 }
 
+include!("bridge.rs");
+
 pub fn run() {
     let context=tauri::generate_context!();
     let mut arguments=std::env::args_os().skip(1);
@@ -637,6 +645,7 @@ pub fn run() {
     }
     tauri::Builder::default()
         .manage(Arc::new(CollabCell::new()))
+        .manage(Arc::new(http_cell()))
         .invoke_handler(tauri::generate_handler![
             documents_list,
             documents_save,
@@ -672,6 +681,33 @@ pub fn run() {
             themes_pick_export,
             ui_prefs_get,
             ui_prefs_set,
+            documents_folders,
+            documents_folder_save,
+            documents_folder_delete,
+            documents_history,
+            documents_backup,
+            documents_import_copies,
+            documents_attachment_put,
+            documents_attachment_get,
+            documents_render_html,
+            documents_sync_vault,
+            search_text,
+            documents_epoch,
+            workspace_revision,
+            mcp_config_get,
+            mcp_config_set,
+            mcp_token_generate,
+            mcp_token_revoke,
+            mcp_pending_list,
+            mcp_pending_resolve,
+            mcp_audit_list,
+            mcp_audit_undo,
+            mcp_clients,
+            mcp_binary_path,
+            mcp_http_apply,
+            notify_user,
+            themes_read_dropped,
+            collab_share_theme,
         ])
         .run(context)
         .expect("Unable to start Sreda");
