@@ -4,12 +4,12 @@
   <img src="docs/banner.png" alt="Среда — всё под рукой. Локально, приватно и спокойно." width="100%" />
 </p>
 
-Локальные канбан-доски и Markdown-документы для Windows. Доски, документы, темы и база SQLite остаются на вашем компьютере. Совместная работа — по ссылке-приглашению. MCP для ИИ выключен, пока вы сами его не включите.
+Локальные канбан-доски и Markdown-документы для Windows и Linux. Доски, документы, темы и база SQLite остаются на вашем компьютере. Совместная работа — по ссылке-приглашению. MCP для ИИ выключен, пока вы сами его не включите.
 
 [![CI](https://github.com/ZAREZOV2/sreda/actions/workflows/ci.yml/badge.svg)](https://github.com/ZAREZOV2/sreda/actions/workflows/ci.yml)
 [![Релиз](https://img.shields.io/github/v/release/ZAREZOV2/sreda?label=%D1%80%D0%B5%D0%BB%D0%B8%D0%B7)](https://github.com/ZAREZOV2/sreda/releases/latest)
 [![Лицензия GPL-3.0](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
-[![Платформа Windows](https://img.shields.io/badge/platform-Windows%20x64-lightgrey)](#установка)
+[![Платформа Windows и Linux](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Linux%20x64-lightgrey)](#установка)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React-orange)](https://tauri.app)
 
 **[Скачать установщик 0.3.0](https://github.com/ZAREZOV2/sreda/releases/download/v0.3.0/Sreda_0.3.0_x64-setup.exe)** · [все релизы](https://github.com/ZAREZOV2/sreda/releases) · [English](README.en.md)
@@ -35,13 +35,36 @@
 
 ## Установка
 
+### Windows
+
 Нужен Windows x64. Скачайте [Sreda_0.3.0_x64-setup.exe](https://github.com/ZAREZOV2/sreda/releases/download/v0.3.0/Sreda_0.3.0_x64-setup.exe) со [страницы релиза v0.3.0](https://github.com/ZAREZOV2/sreda/releases/tag/v0.3.0). В списке файлов установщик подписан как «Среда_0.3.0_x64-setup.exe», само имя файла — `Sreda_0.3.0_x64-setup.exe`. Рядом лежит `sreda-mcp.exe`: он уже входит в установщик, отдельный файл нужен только если MCP подключаете без окна приложения.
 
 WebView2 установщик скачает сам, если его ещё нет. Данные остаются в `%LOCALAPPDATA%\local.sreda.kanban`.
 
+### Linux
+
+Начиная со следующего релиза по тегу `v*` на той же странице релиза лежат AppImage, пакеты `.deb` и `.rpm` и бинарник `sreda-mcp` для Linux x64. Сборка идёт на Ubuntu 22.04, чтобы glibc был достаточно старым и пакет открывался на Arch и CachyOS.
+
+AppImage — самый прямой путь на Arch и CachyOS. Скачайте файл `Sreda_*_amd64.AppImage`, отметьте его исполняемым и запустите. Нужны FUSE 2 и WebKitGTK 4.1:
+
+```bash
+chmod +x Sreda_*_amd64.AppImage
+# Arch и CachyOS
+sudo pacman -S --needed fuse2 webkit2gtk-4.1 gtk3 librsvg
+./Sreda_*_amd64.AppImage
+```
+
+Debian и Ubuntu: `sudo apt install ./Sreda_*_amd64.deb`. Зависимости пакета — `libwebkit2gtk-4.1-0`, GTK 3, `libayatana-appindicator3-1` (или `libappindicator3-1`) и `librsvg2-2`. Fedora и другие rpm-системы: `sudo dnf install ./Sreda-*.rpm` (`webkit2gtk4.1`, `gtk3`, `libappindicator-gtk3`, `librsvg2`).
+
+Диалоги открытия файлов идут через портал рабочего стола (`xdg-desktop-portal`): на CachyOS и обычном Arch с KDE или GNOME он уже есть. Совместная работа через ngrok использует тот же Rust-клиент, что и на Windows, отдельный бинарник ngrok не нужен. Данные лежат в `$XDG_DATA_HOME/local.sreda.kanban`, а если переменная не задана — в `~/.local/share/local.sreda.kanban`. Sidecar MCP после установки называется `sreda-mcp` и лежит рядом с программой, без суффикса целевой тройки.
+
+Черновик Linux-сборки можно скачать артефактом `linux-bundles` у проверки pull request, не дожидаясь тега.
+
 ## Сборка из исходников
 
-Windows, Node.js 22.16+, Rust 1.90+ (MSVC), Visual Studio Build Tools с рабочей нагрузкой C++, WebView2.
+Node.js 22.16+ и Rust 1.90+.
+
+Windows: MSVC, Visual Studio Build Tools с рабочей нагрузкой C++, WebView2.
 
 ```powershell
 cd app
@@ -52,11 +75,27 @@ npm run tauri dev
 npm run installer
 ```
 
-`npm run tauri dev` открывает окно разработки. `npm run installer` собирает NSIS для текущего пользователя, языки ru/en и тихий загрузчик WebView2.
+`npm run tauri dev` открывает окно разработки. `npm run installer` собирает NSIS для текущего пользователя, языки ru/en и тихий загрузчик WebView2. Рядом собирается `sreda-mcp.exe`. В CI по тегу `v*` он попадает в релиз и в установщик как sidecar: файл в репозитории называется `sreda-mcp-x86_64-pc-windows-msvc.exe`, в установке — `sreda-mcp.exe`.
 
-Рядом собирается `sreda-mcp.exe`. В CI по тегу `v*` он попадает в релиз и в установщик как sidecar.
+Linux, Debian и Ubuntu:
 
-На Linux CI гоняет тесты интерфейса и `cargo test` библиотеки (нужен WebKitGTK, как в [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Установщик NSIS собирается на Windows.
+```bash
+sudo apt-get update
+sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev pkg-config build-essential libdbus-1-dev file
+cd app
+npm ci
+npm test
+npm run typecheck
+npm run tauri dev
+```
+
+Если `libayatana-appindicator3-dev` нет, поставьте `libappindicator3-dev`. Пакеты AppImage, deb и rpm: соберите `sreda-mcp`, положите его как `src-tauri/binaries/sreda-mcp-$(rustc -vV | sed -n 's/^host: //p')` и запустите `npm run bundle:linux`. На Arch и CachyOS те же библиотеки ставятся так:
+
+```bash
+sudo pacman -S --needed webkit2gtk-4.1 gtk3 libayatana-appindicator librsvg base-devel openssl pkgconf dbus
+```
+
+Если пакета `libayatana-appindicator` нет, подойдёт `libappindicator-gtk3`. CI собирает те же пакеты на Ubuntu 22.04 и по тегу `v*` кладёт их в релиз рядом с установщиком Windows.
 
 ## MCP
 
@@ -74,7 +113,7 @@ npm run installer
 }
 ```
 
-Путь подставляет само приложение. Бинарник читает ту же базу, что и окно. Переменная `SREDA_DB` переопределяет путь к файлу SQLite.
+На Linux тот же фрагмент с путём к `sreda-mcp` без `.exe`. Путь подставляет само приложение. Бинарник читает ту же базу, что и окно. Переменная `SREDA_DB` переопределяет путь к файлу SQLite.
 
 ## Темы
 

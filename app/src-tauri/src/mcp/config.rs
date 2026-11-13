@@ -119,25 +119,44 @@ pub fn token_matches(hash: &str, token: &str) -> bool {
 }
 
 pub fn database_path() -> PathBuf {
-    if let Ok(path) = std::env::var("SREDA_DB") {
+    resolve_database_path(cfg!(windows), |key| std::env::var(key).ok())
+}
+
+/// SQLite path shared by the window and the `sreda-mcp` sidecar.
+/// Windows uses `%LOCALAPPDATA%`. Linux ignores that variable and follows XDG.
+pub fn resolve_database_path(windows: bool, var: impl Fn(&str) -> Option<String>) -> PathBuf {
+    if let Some(path) = var("SREDA_DB") {
         return PathBuf::from(path);
     }
-    #[cfg(windows)]
-    {
-        let base = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".into());
-        return PathBuf::from(base)
-            .join("local.sreda.kanban")
-            .join("sreda.sqlite3");
-    }
-    #[cfg(not(windows))]
-    {
-        let base = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let root = if windows {
+        var("LOCALAPPDATA").unwrap_or_else(|| ".".into())
+    } else {
+        var("XDG_DATA_HOME").unwrap_or_else(|| {
+            let home = var("HOME").unwrap_or_else(|| ".".into());
             format!("{home}/.local/share")
-        });
-        PathBuf::from(base)
-            .join("local.sreda.kanban")
-            .join("sreda.sqlite3")
+        })
+    };
+    PathBuf::from(root)
+        .join("local.sreda.kanban")
+        .join("sreda.sqlite3")
+}
+
+/// Filename Tauri expects in `binaries/` before it strips `-{target}`.
+pub fn sidecar_bundle_filename(target_triple: &str) -> String {
+    let extension = if target_triple.contains("windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    format!("sreda-mcp-{target_triple}{extension}")
+}
+
+/// Filename next to the app after bundling. No target triple.
+pub fn sidecar_runtime_filename() -> &'static str {
+    if cfg!(windows) {
+        "sreda-mcp.exe"
+    } else {
+        "sreda-mcp"
     }
 }
 
@@ -154,5 +173,67 @@ mod tests {
         let (token, hash) = generate_token();
         assert!(token_matches(&hash, &token));
         assert!(!token_matches(&hash, "other-token-value"));
+    }
+
+    fn env<'a>(vars: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |key| vars.iter().find(|(name, _)| *name == key).map(|(_, value)| (*value).to_string())
+    }
+
+    #[test]
+    fn database_path_on_linux_uses_xdg_and_ignores_localappdata() {
+        let path = resolve_database_path(
+            false,
+            env(&[
+                ("LOCALAPPDATA", r"C:\Users\ann\AppData\Local"),
+                ("XDG_DATA_HOME", "/home/ann/.local/share"),
+                ("HOME", "/home/ann"),
+            ]),
+        );
+        assert_eq!(
+            path,
+            PathBuf::from("/home/ann/.local/share/local.sreda.kanban/sreda.sqlite3")
+        );
+        let fallback = resolve_database_path(false, env(&[("HOME", "/home/ann")]));
+        assert_eq!(
+            fallback,
+            PathBuf::from("/home/ann/.local/share/local.sreda.kanban/sreda.sqlite3")
+        );
+        let override_path = resolve_database_path(
+            false,
+            env(&[("SREDA_DB", "/tmp/sreda.sqlite3"), ("HOME", "/home/ann")]),
+        );
+        assert_eq!(override_path, PathBuf::from("/tmp/sreda.sqlite3"));
+    }
+
+    #[test]
+    fn database_path_on_windows_uses_localappdata() {
+        let path = resolve_database_path(
+            true,
+            env(&[
+                ("LOCALAPPDATA", r"C:\Users\ann\AppData\Local"),
+                ("XDG_DATA_HOME", "/home/ann/.local/share"),
+            ]),
+        );
+        assert_eq!(
+            path,
+            PathBuf::from(r"C:\Users\ann\AppData\Local")
+                .join("local.sreda.kanban")
+                .join("sreda.sqlite3")
+        );
+    }
+
+    #[test]
+    fn sidecar_names_drop_the_target_triple() {
+        let linux = sidecar_bundle_filename("x86_64-unknown-linux-gnu");
+        assert_eq!(linux, "sreda-mcp-x86_64-unknown-linux-gnu");
+        assert_eq!(
+            linux.replace("-x86_64-unknown-linux-gnu", ""),
+            "sreda-mcp"
+        );
+        let windows = sidecar_bundle_filename("x86_64-pc-windows-msvc");
+        assert_eq!(windows, "sreda-mcp-x86_64-pc-windows-msvc.exe");
+        assert_eq!(windows.replace("-x86_64-pc-windows-msvc", ""), "sreda-mcp.exe");
+        assert!(!sidecar_runtime_filename().contains("unknown-linux"));
+        assert!(!sidecar_runtime_filename().contains("pc-windows"));
     }
 }
