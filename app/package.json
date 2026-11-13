@@ -70,7 +70,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "happy-dom": "^21.0.4",
     "prettier": "^3.10.0",
-    "typescript": "~5.7.2",
+    "typescript": "~7.0.2",
     "vite": "^6.1.0"
   },
   "overrides": {
