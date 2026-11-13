@@ -47,9 +47,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
-      - name: Зависимости
+      - name: Зависимости и сборка интерфейса
         working-directory: app
-        run: npm ci
+        run: |
+          npm ci
+          npm run build
       - name: Бинарник MCP
         run: |
           cargo build --release --bin sreda-mcp --manifest-path app/src-tauri/Cargo.toml
