@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import packageInfo from "../package.json" with { type: "json" };
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   Check,
@@ -467,7 +468,7 @@ export function SettingsDialog({
                     <BrandMark size={48} />
                   </span>
                   <h3>Среда</h3>
-                  <p>Версия 0.2.0</p>
+                  <p>Версия {packageInfo.version}</p>
                   <p className="field-hint">
                     Локальные канбан-доски. Данные остаются на вашем устройстве.
                     Совместная работа идёт по ссылке через защищённый туннель

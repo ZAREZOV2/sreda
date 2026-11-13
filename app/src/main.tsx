@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import * as Dialog from "@radix-ui/react-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createCommandQueue } from "./commands";
+import { Documents } from "./DocumentsPanel";
 import type { Commit } from "./commands";
 import {
   Plus,
@@ -25,6 +26,7 @@ import {
   PanelLeftOpen,
   X,
   LayoutGrid,
+  FileText,
   Trash2,
   Download,
   Upload,
@@ -551,6 +553,15 @@ function TaskEditor({
 }
 
 function App() {
+  const [documentsOpen, setDocumentsOpen] = useState(false);
+  const documentGuard = useRef<DraftGuard | null>(null);
+  const onDocumentGuard = useCallback((value: DraftGuard | null) => { documentGuard.current = value; }, []);
+  const showDocuments = async (open: boolean) => {
+    if (guard.current && !(await guard.current.flush())) return false;
+    if (documentGuard.current && !(await documentGuard.current.flush())) return false;
+    setDocumentsOpen(open);
+    return true;
+  };
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [snapshot, setSnapshot] = useState<Snapshot>({
     workspace: emptyWorkspace(),
@@ -659,6 +670,7 @@ function App() {
         closing = true;
         try {
           if (guard.current && !(await guard.current.flush())) return;
+          if (documentGuard.current && !(await documentGuard.current.flush())) return;
           await commands.current!.idle();
           await window.destroy();
         } catch (e) {
@@ -925,9 +937,9 @@ function App() {
       openShareActive: () => {
         setHostStatus({
           running: true,
-          publicUrl: "https://sreda.ngrok.app",
-          inviteLink:
-            "https://sreda.ngrok.app#sreda-invite=eyJmb3JtYXQiOiJzcmVkYS1pbnZpdGUiLCJ2ZXJzaW9uIjoxLCJ3b3Jrc3BhY2VJZCI6IndzX2RlbW8iLCJob3N0SWQiOiJob3N0X2x1Y2FzIiwidXJsIjoiaHR0cHM6Ly9zcmVkYS5uZ3Jvay5hcHAiLCJzdGF0aWNEb21haW4iOnRydWUsInRva2VuIjoiYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIn0",
+          publicUrl: "https://example.invalid",
+          // UI fixture: no real endpoint or reusable invitation token.
+          inviteLink: "",
           staticDomain: true,
           workspaceId: "ws_demo",
           hostId: "host_lucas",
@@ -1514,6 +1526,16 @@ function App() {
           </span>
         </div>
         <div className="sidebar-divider" />
+        <nav className="workspace-navigation" aria-label="Разделы пространства">
+          <button className={"board-link workspace-link " + (!documentsOpen ? "active" : "")} aria-current={!documentsOpen ? "page" : undefined} onClick={() => void showDocuments(false)}>
+            <LayoutGrid size={18} aria-hidden="true" />
+            <span>Доски</span>
+          </button>
+          <button className={"board-link workspace-link " + (documentsOpen ? "active" : "")} aria-current={documentsOpen ? "page" : undefined} onClick={() => void showDocuments(true)}>
+            <FileText size={18} aria-hidden="true" />
+            <span>Документы</span>
+          </button>
+        </nav>
         <label className="sidebar-search">
           <Search size={15} />
           <input
@@ -1549,9 +1571,9 @@ function App() {
             <button
               key={b.id}
               title={b.name}
-              className={"board-link " + (board?.id === b.id ? "active" : "")}
+              className={"board-link " + (!documentsOpen && board?.id === b.id ? "active" : "")}
               disabled={!!editor}
-              onClick={() => selectBoard(b.id)}
+              onClick={async () => { if (await showDocuments(false)) selectBoard(b.id); }}
             >
               <LayoutGrid size={16} />
               <span>{b.name}</span>
@@ -1630,8 +1652,8 @@ function App() {
               )}
             </Button>
             <span className="crumb-separator" />
-            <span>Мои доски</span>
-            {board && (
+            <span>{documentsOpen ? "Документы" : "Мои доски"}</span>
+            {!documentsOpen && board && (
               <>
                 <ChevronRight size={13} />
                 <strong>{board.name}</strong>
@@ -1813,7 +1835,7 @@ function App() {
             </Button>
           </div>
         )}
-        {loading ? (
+        {documentsOpen ? <Documents onGuard={onDocumentGuard} /> : loading ? (
           <div className="empty-screen">
             <LoaderCircle size={24} className="spin" />
             <h1>Открываем рабочее пространство</h1>
@@ -2442,3 +2464,4 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>,
 );
+

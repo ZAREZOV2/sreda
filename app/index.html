@@ -8,18 +8,12 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="./favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-    <link rel="stylesheet" href="./fonts/fonts.css" />
-    <script>
-      try {
-        var base = localStorage.getItem("sreda.theme-base");
-        if (base === "light" || base === "dark") {
-          document.documentElement.setAttribute("data-theme", base);
-        }
-      } catch (e) {}
-    </script>
+    <link rel="stylesheet" href="/fonts/fonts.css" />
+    <link rel="stylesheet" href="/startup.css" />
+    <script src="/startup.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="startup-status" role="status"><strong>Среда</strong><p>Открываем рабочее пространство…</p></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

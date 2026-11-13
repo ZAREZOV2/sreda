@@ -1,0 +1,126 @@
+.documents-area {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.documents-list {
+  width: 240px;
+  flex-shrink: 0;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.documents-list h2 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+.document-link {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.document-link.active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.document-editor {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 16px;
+  overflow: auto;
+}
+.document-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.document-toolbar > span {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.document-title {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font: 600 28px var(--font-sans);
+  padding: 12px 0;
+  width: 100%;
+}
+.document-source-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.document-source {
+  flex: 1;
+  min-height: 300px;
+  resize: none;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  font: 14px/1.8 var(--font-mono);
+  tab-size: 2;
+}
+.document-preview {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+  max-width: 960px;
+  padding: 12px 20px;
+}
+.document-preview pre {
+  overflow: auto;
+  padding: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.document-preview code {
+  font-family: var(--font-mono);
+}
+.document-preview table {
+  border-collapse: collapse;
+  display: block;
+  overflow: auto;
+}
+.document-preview th,
+.document-preview td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+}
+.document-preview blockquote {
+  border-left: 3px solid var(--accent);
+  margin-left: 0;
+  padding-left: 20px;
+  color: var(--text-secondary);
+}
+.document-preview img {
+  max-width: 100%;
+}
+.document-preview a {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+@media (max-width: 850px) {
+  .documents-list {
+    width: 190px;
+  }
+  .document-editor {
+    padding: 16px;
+  }
+}

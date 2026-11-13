@@ -1,9 +1,8 @@
 [package]
 name = "sreda-kanban"
-version = "0.2.0"
+version = "0.2.3"
 description = "Local Kanban board"
 edition = "2021"
-license = "GPL-3.0-or-later"
 rust-version = "1.90"
 
 [lib]
@@ -13,10 +12,12 @@ crate-type = ["lib", "cdylib", "staticlib"]
 [[bin]]
 name = "sreda-kanban"
 path = "src/main.rs"
+required-features = ["desktop"]
 
 [features]
-default = ["desktop"]
+default = ["desktop", "custom-protocol"]
 desktop = ["dep:tauri", "dep:rfd", "dep:tauri-build"]
+custom-protocol = ["desktop", "tauri/custom-protocol"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [], optional = true }

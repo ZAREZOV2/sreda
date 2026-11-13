@@ -63,6 +63,41 @@ async fn load_workspace(app: AppHandle) -> Result<Snapshot, String> {
 }
 
 #[tauri::command]
+async fn documents_list(app: AppHandle) -> Result<Vec<crate::documents::Document>, String> {
+    let path = database(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::documents::list(&path)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn documents_save(app: AppHandle, document: crate::documents::Document) -> Result<i64, String> {
+    let path = database(&app)?;
+    tauri::async_runtime::spawn_blocking(move || crate::documents::save(&path, &document)).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn documents_import() -> Result<Option<(String, String)>, String> {
+    let Some(handle) = rfd::AsyncFileDialog::new().set_title("Импорт Markdown").add_filter("Markdown", &["md", "markdown"]).pick_file().await else { return Ok(None); };
+    use std::io::Read;
+    let file = std::fs::File::open(handle.path()).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    file.take(2 * 1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() > 2 * 1024 * 1024 { return Err("Файл больше 2 МБ".into()); }
+    let markdown = String::from_utf8(bytes).map_err(|_| "Ожидался Markdown в UTF-8".to_string())?;
+    if markdown.contains('\0') { return Err("Файл содержит недопустимые символы".into()); }
+    let title = handle.path().file_stem().and_then(|s| s.to_str()).unwrap_or("Документ").chars().take(200).collect();
+    Ok(Some((title, markdown.trim_start_matches('\u{feff}').to_string())))
+}
+
+#[tauri::command]
+async fn documents_export(title: String, markdown: String) -> Result<bool, String> {
+    if markdown.len() > 2 * 1024 * 1024 { return Err("Документ больше 2 МБ".into()); }
+    let safe: String = title.chars().take(100).map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }).collect();
+    let Some(handle) = rfd::AsyncFileDialog::new().set_title("Экспорт Markdown").set_file_name(format!("{}.md", if safe.trim().is_empty() { "Документ" } else { &safe })).add_filter("Markdown", &["md"]).save_file().await else { return Ok(false); };
+    storage::write_export(handle.path(), markdown.as_bytes())?;
+    Ok(true)
+}
+
+#[tauri::command]
 async fn save_workspace(
     app: AppHandle,
     workspace: Workspace,
@@ -590,9 +625,23 @@ fn ui_prefs_set(app: AppHandle, prefs: serde_json::Value) -> Result<(), String> 
 }
 
 pub fn run() {
+    let context=tauri::generate_context!();
+    let mut arguments=std::env::args_os().skip(1);
+    if arguments.next().as_deref()==Some(std::ffi::OsStr::new("--self-check")) {
+        let report=arguments.next().map(PathBuf::from).expect("--self-check requires a report path");
+        if let Err(error)=crate::diagnostics::verify(&context,&report) {
+            let _=std::fs::write(&report,serde_json::json!({"ok":false,"error":error}).to_string());
+            std::process::exit(1);
+        }
+        return;
+    }
     tauri::Builder::default()
         .manage(Arc::new(CollabCell::new()))
         .invoke_handler(tauri::generate_handler![
+            documents_list,
+            documents_save,
+            documents_import,
+            documents_export,
             load_workspace,
             save_workspace,
             data_location,
@@ -624,6 +673,6 @@ pub fn run() {
             ui_prefs_get,
             ui_prefs_set,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("Unable to start Sreda");
 }

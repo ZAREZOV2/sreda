@@ -1,0 +1,15 @@
+#startup-status {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 32px;
+  background: #161719;
+  color: #e3e8ef;
+  font: 15px/1.6 "Golos Text", "Segoe UI", sans-serif;
+  text-align: center;
+}
+#startup-status strong { font-size: 26px; }
+#startup-status p { max-width: 640px; color: #b4bdc9; white-space: pre-wrap; }
