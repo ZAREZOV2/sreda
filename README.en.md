@@ -1,5 +1,9 @@
 # Sreda
 
+<p align="center">
+  <img src="docs/banner.png" alt="Sreda — local, private and calm kanban boards" width="100%" />
+</p>
+
 Local kanban boards and Markdown documents for Windows. Boards, documents, themes and the SQLite database stay on your computer. Collaboration uses an invite link. The MCP server for AI tools is off until you turn it on.
 
 The full guide is in Russian: [README.md](README.md). This page is the short English path.
