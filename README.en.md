@@ -17,6 +17,8 @@ The full guide is in Russian: [README.md](README.md). This page is the short Eng
 
 Download [Sreda_0.3.0_x64-setup.exe](https://github.com/ZAREZOV2/sreda/releases/download/v0.3.0/Sreda_0.3.0_x64-setup.exe) from the [v0.3.0 release](https://github.com/ZAREZOV2/sreda/releases/tag/v0.3.0). The installer fetches WebView2 if it is missing. Data stays in `%LOCALAPPDATA%\local.sreda.kanban`.
 
+Release assets include `SHA256SUMS.txt` with SHA-256 hashes of the installer and standalone MCP executable. Compare those hashes against downloaded files. Authenticode signing is optional and only runs when repository certificate secrets are configured.
+
 ## Build
 
 Windows, Node.js 22.16+, Rust 1.90+ (MSVC), the Visual Studio C++ build tools and WebView2.
