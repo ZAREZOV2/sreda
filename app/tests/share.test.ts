@@ -16,7 +16,7 @@ import {
 
 const host = {
   workspaceId: "ws_alpha",
-  hostId: "host_lucas",
+  hostId: "host_demo",
 };
 
 function invite(overrides: Partial<Parameters<typeof createInvite>[0]> = {}) {

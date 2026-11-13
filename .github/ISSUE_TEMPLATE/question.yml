@@ -1,0 +1,28 @@
+name: Вопрос
+description: Как пользоваться «Средой», если это не ошибка и не идея
+title: "Вопрос: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Такой вопрос можно задать и в [обсуждениях](https://github.com/ZAREZOV2/sreda/discussions). Для поломки есть шаблон «Ошибка», для уязвимости — [SECURITY.md](https://github.com/ZAREZOV2/sreda/blob/main/SECURITY.md).
+  - type: textarea
+    id: question
+    attributes:
+      label: Вопрос
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия
+      placeholder: "0.3.0"
+    validations:
+      required: false
+  - type: textarea
+    id: tried
+    attributes:
+      label: Что уже пробовали
+    validations:
+      required: false

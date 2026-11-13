@@ -4,16 +4,15 @@
   <img src="app/public/apple-touch-icon.png" alt="Знак «Узел»" width="72" height="72" />
 </p>
 
-Локальные канбан-доски и Markdown-документы. Всё лежит на вашем компьютере: SQLite, темы, совместная работа по приглашению и, если включите, MCP для ИИ.
+Локальные канбан-доски и Markdown-документы для Windows. Доски, документы, темы и база SQLite остаются на вашем компьютере. Совместная работа — по ссылке-приглашению. MCP для ИИ выключен, пока вы сами его не включите.
 
+[![CI](https://github.com/ZAREZOV2/sreda/actions/workflows/ci.yml/badge.svg)](https://github.com/ZAREZOV2/sreda/actions/workflows/ci.yml)
+[![Релиз](https://img.shields.io/github/v/release/ZAREZOV2/sreda?label=%D1%80%D0%B5%D0%BB%D0%B8%D0%B7)](https://github.com/ZAREZOV2/sreda/releases/latest)
 [![Лицензия GPL-3.0](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
-[![Версия 0.3.0](https://img.shields.io/badge/version-0.3.0-green)](CHANGELOG.md)
-[![Платформа Windows](https://img.shields.io/badge/platform-Windows-lightgrey)](#установка)
+[![Платформа Windows](https://img.shields.io/badge/platform-Windows%20x64-lightgrey)](#установка)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%202%20%C2%B7%20Rust%20%C2%B7%20React-orange)](https://tauri.app)
 
-## English
-
-Sreda is a local kanban and Markdown app for Windows. Boards, documents, themes and optional MCP stay on the machine. Collaboration uses an invite link. The project is GPL-3.0-or-later. The rest of this file is in Russian.
+**[Скачать установщик 0.3.0](https://github.com/ZAREZOV2/sreda/releases/download/v0.3.0/Sreda_0.3.0_x64-setup.exe)** · [все релизы](https://github.com/ZAREZOV2/sreda/releases) · [English](README.en.md)
 
 ## Возможности
 
@@ -22,8 +21,8 @@ Sreda is a local kanban and Markdown app for Windows. Boards, documents, themes 
 - Описание карточки в Markdown, связь документа с карточкой, чек-лист `- [ ]` ↔ карточки, ссылки `[[Документ]]`.
 - Полнотекстовый поиск по документам и карточкам (SQLite FTS5).
 - Помидор и учёт времени, повторяющиеся задачи, локальные напоминания.
-- Темы `*.sreda-theme.json`, редактор «на основе текущей», проверка контраста, перетаскивание файла в окно.
-- Совместная работа по ссылке (WebSocket, при желании через ngrok) и передача темы участникам.
+- Темы `*.sreda-theme.json`, редактор «на основе текущей», проверка контраста, перетаскивание файла темы в окно.
+- Совместная работа по ссылке (WebSocket; при желании через ngrok) и передача темы участникам.
 - MCP для Claude Desktop и Cursor: по умолчанию выключен, HTTP только на `127.0.0.1`.
 
 ## Скриншоты
@@ -36,7 +35,9 @@ Sreda is a local kanban and Markdown app for Windows. Boards, documents, themes 
 
 ## Установка
 
-Скачайте установщик `Среда_0.3.0_x64-setup.exe` со [страницы релизов](https://github.com/search?q=sreda&type=repositories). Нужен WebView2: установщик ставит его сам, если его ещё нет. Данные остаются в `%LOCALAPPDATA%\local.sreda.kanban`.
+Нужен Windows x64. Скачайте [Sreda_0.3.0_x64-setup.exe](https://github.com/ZAREZOV2/sreda/releases/download/v0.3.0/Sreda_0.3.0_x64-setup.exe) со [страницы релиза v0.3.0](https://github.com/ZAREZOV2/sreda/releases/tag/v0.3.0). В списке файлов установщик подписан как «Среда_0.3.0_x64-setup.exe», само имя файла — `Sreda_0.3.0_x64-setup.exe`. Рядом лежит `sreda-mcp.exe`: он уже входит в установщик, отдельный файл нужен только если MCP подключаете без окна приложения.
+
+WebView2 установщик скачает сам, если его ещё нет. Данные остаются в `%LOCALAPPDATA%\local.sreda.kanban`.
 
 ## Сборка из исходников
 
@@ -51,9 +52,11 @@ npm run tauri dev
 npm run installer
 ```
 
-`npm run tauri dev` — окно разработки. `npm run installer` собирает NSIS для текущего пользователя, языки ru/en, тихий загрузчик WebView2.
+`npm run tauri dev` открывает окно разработки. `npm run installer` собирает NSIS для текущего пользователя, языки ru/en и тихий загрузчик WebView2.
 
-Рядом с приложением собирается `sreda-mcp.exe`. В CI он кладётся в релиз и в установщик как sidecar.
+Рядом собирается `sreda-mcp.exe`. В CI по тегу `v*` он попадает в релиз и в установщик как sidecar.
+
+На Linux CI гоняет тесты интерфейса и `cargo test` библиотеки (нужен WebKitGTK, как в [`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Установщик NSIS собирается на Windows.
 
 ## MCP
 
@@ -79,23 +82,25 @@ npm run installer
 
 ## Совместная работа
 
-Кнопка «Поделиться» поднимает локальный WebSocket. Токен ngrok и статический домен необязательны: без них гости в вашей сети подключаются по локальному адресу, а после перезапуска без статического домена нужна новая ссылка. Доска узнаётся по `workspaceId` и `hostId`.
+Кнопка «Поделиться» поднимает локальный WebSocket. Токен ngrok и статический домен необязательны: без них гости в вашей сети подключаются по локальному адресу, а после перезапуска без статического домена нужна новая ссылка. Доска узнаётся по `workspaceId` и `hostId`. Токен приглашения хранится только у хозяина доски.
 
 ## Структура
 
 ```text
-app/            React, тесты, src-tauri (Rust, SQLite, совместная работа, MCP)
-scripts/        сборка интерфейса и локальный выпуск
-docs/           скриншоты
-CHANGELOG.md    журнал версий, его же показывает раздел «Обновления»
+app/                 React, тесты, src-tauri (Rust, SQLite, совместная работа, MCP)
+app/src-tauri/       окно приложения и бинарник sreda-mcp
+scripts/             сборка интерфейса и локальный выпуск
+docs/screenshots/    скриншоты для этого README
+.github/             CI, Dependabot, шаблоны issue и pull request
+CHANGELOG.md         журнал версий, его же показывает раздел «Обновления»
 ```
 
-План, который вошёл в 0.3.0, лежит в [app/ROADMAP.md](app/ROADMAP.md). Журнал — в [CHANGELOG.md](CHANGELOG.md).
+План, который вошёл в 0.3.0, и то, что ещё впереди, — в [app/ROADMAP.md](app/ROADMAP.md). Журнал — в [CHANGELOG.md](CHANGELOG.md). Заметки разработчика по ранним сборкам — в [app/CHANGES.md](app/CHANGES.md).
 
 ## Участие
 
-Смотрите [CONTRIBUTING.md](CONTRIBUTING.md). Короткие правки и сообщения об ошибках приветствуются.
+Смотрите [CONTRIBUTING.md](CONTRIBUTING.md). Короткие правки и сообщения об ошибках приветствуются. Вопросы — [обсуждения](https://github.com/ZAREZOV2/sreda/discussions) или [issue](https://github.com/ZAREZOV2/sreda/issues). Как сообщить об уязвимости, не создавая публичный issue: [SECURITY.md](SECURITY.md). Поддержка пользователей: [SUPPORT.md](SUPPORT.md).
 
 ## Лицензия
 
-GPL-3.0-or-later. Текст — в [LICENSE](LICENSE).
+[GPL-3.0-or-later](LICENSE). Шрифты Golos Text и JetBrains Mono поставляются отдельно под [SIL OFL 1.1](app/public/fonts/OFL-GolosText.txt) и не перелицензируются под GPL. Краткие уведомления о библиотеках интерфейса — в [app/THIRD-PARTY-NOTICES.txt](app/THIRD-PARTY-NOTICES.txt).

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Сообщить об уязвимости приватно
+    url: https://github.com/ZAREZOV2/sreda/security/advisories/new
+    about: Не создавайте публичный issue с деталями уязвимости. Порядок описан в SECURITY.md.
+  - name: Обсуждения
+    url: https://github.com/ZAREZOV2/sreda/discussions
+    about: Вопрос без конкретной ошибки удобнее задать в Discussions.
+  - name: Скачать установщик
+    url: https://github.com/ZAREZOV2/sreda/releases/latest
+    about: Готовая сборка для Windows x64 лежит на странице релизов.

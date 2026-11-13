@@ -1,0 +1,52 @@
+name: Ошибка
+description: Что-то сломалось в окне, в данных, в совместной работе или в MCP
+title: "Ошибка: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что написали. Если это уязвимость, не заполняйте эту форму: откройте [приватный отчёт](https://github.com/ZAREZOV2/sreda/security/advisories/new).
+        Не вставляйте токен ngrok, токен MCP и содержимое личных досок.
+  - type: textarea
+    id: what
+    attributes:
+      label: Что произошло
+      description: Что вы ожидали и что увидели вместо этого.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить
+      placeholder: |
+        1. Открыть …
+        2. Нажать …
+        3. Увидеть …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия «Среды»
+      description: Настройки → О программе, либо имя установщика.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Система
+      options:
+        - Windows 11
+        - Windows 10
+        - Другая (напишите в описании)
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Дополнительно
+      description: Текст ошибки или скриншот. Секреты закрасьте.
+    validations:
+      required: false

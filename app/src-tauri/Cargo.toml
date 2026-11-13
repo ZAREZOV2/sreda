@@ -3,6 +3,7 @@ name = "sreda-kanban"
 version = "0.3.0"
 license = "GPL-3.0-or-later"
 description = "Local Kanban board"
+repository = "https://github.com/ZAREZOV2/sreda"
 edition = "2021"
 rust-version = "1.90"
 
