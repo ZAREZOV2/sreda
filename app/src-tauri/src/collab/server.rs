@@ -434,7 +434,7 @@ async fn handle_client(session: &Session, guest_id: &str, bytes: &[u8]) -> Resul
                         .await;
                     Ok(())
                 }
-                Err((message, snapshot)) => {
+                Err((message, _snapshot)) => {
                     let response = {
                         let inner = session.inner.lock().await;
                         inner.peers.get(guest_id).map(|peer| {
@@ -705,7 +705,7 @@ mod tests {
             .current_invite
             .clone()
             .unwrap();
-        let _new_link = host.revoke().await.unwrap();
+        let _new_link = host.revoke("b1", "edit").await.unwrap();
         let mut socket = connect(&url, &old, "late").await;
         let msg = next_json(&mut socket).await;
         assert_eq!(msg["type"], "error");
