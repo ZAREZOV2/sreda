@@ -15,12 +15,13 @@ export type CloseResult = {
 
 export function applyHostClosed(
   records: GuestBoard[],
-  invite: Pick<InvitePayload, "workspaceId" | "hostId">,
+  invite: Pick<InvitePayload, "workspaceId" | "hostId" | "boardId">,
   workspace: Workspace | null,
   decision: CloseDecision,
 ): CloseResult {
   const match = (record: GuestBoard) =>
-    record.workspaceId === invite.workspaceId && record.hostId === invite.hostId;
+    record.workspaceId === invite.workspaceId && record.hostId === invite.hostId
+      && record.board.id === invite.boardId;
   if (decision === "save-local") {
     const fallbackBoard = records.find(match)?.board;
     const localCopies = workspace
