@@ -294,6 +294,8 @@ struct IdleStatus {
     running: bool,
     public_url: Option<String>,
     invite_link: Option<String>,
+    invite_board_id: Option<String>,
+    invite_role: Option<String>,
     static_domain: bool,
     workspace_id: Option<String>,
     host_id: Option<String>,
@@ -314,6 +316,8 @@ async fn collab_host_status(
             running: false,
             public_url: None,
             invite_link: None,
+            invite_board_id: None,
+            invite_role: None,
             static_domain: false,
             workspace_id: Some(identity.workspace_id),
             host_id: Some(identity.host_id),
@@ -448,17 +452,25 @@ async fn collab_host_set_profile(
 }
 
 #[tauri::command]
-async fn collab_invite_issue(cell: State<'_, Arc<CollabCell>>) -> Result<String, String> {
+async fn collab_invite_issue(
+    cell: State<'_, Arc<CollabCell>>,
+    board_id: String,
+    role: String,
+) -> Result<String, String> {
     let guard = cell.host.lock().await;
     let host = guard.as_ref().ok_or("Сначала откройте доступ")?;
-    host.issue_invite().await
+    host.issue_invite(&board_id, &role).await
 }
 
 #[tauri::command]
-async fn collab_invite_revoke(cell: State<'_, Arc<CollabCell>>) -> Result<String, String> {
+async fn collab_invite_revoke(
+    cell: State<'_, Arc<CollabCell>>,
+    board_id: String,
+    role: String,
+) -> Result<String, String> {
     let guard = cell.host.lock().await;
     let host = guard.as_ref().ok_or("Сначала откройте доступ")?;
-    host.revoke().await
+    host.revoke(&board_id, &role).await
 }
 
 #[tauri::command]

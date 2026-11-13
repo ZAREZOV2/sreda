@@ -718,6 +718,9 @@ function App() {
       save: async (workspace, revision) => {
         if (hostingRef.current) return collabApi.hostPush(workspace, revision);
         if (guestOnlineRef.current && clientRef.current) {
+          if (collabRef.current.invite?.role === "view") {
+            throw Error("Это приглашение разрешает только просмотр доски");
+          }
           return new Promise<number>((resolve, reject) => {
             pushWaiter.current = { resolve, reject };
             clientRef.current!.push(workspace, revision);
@@ -852,7 +855,8 @@ function App() {
         if (invite) {
           const records = guestBoardsRef.current.map((record) =>
             record.workspaceId === invite.workspaceId &&
-            record.hostId === invite.hostId
+            record.hostId === invite.hostId &&
+            record.board.id === invite.boardId
               ? { ...record, status: "disconnected" as const }
               : record,
           );
@@ -1171,14 +1175,14 @@ function App() {
     }
     setShareOpen(true);
   };
-  const startShare = async () => {
+  const startShare = async (boardId: string, role: "view" | "edit") => {
     setShareBusy(true);
     setShareError("");
     try {
       await collabApi.settingsSet(shareSettings);
       const started = await collabApi.hostStart();
-      const inviteLink = started.inviteLink || (await collabApi.inviteIssue());
-      const status = { ...started, inviteLink };
+      const inviteLink = await collabApi.inviteIssue(boardId, role);
+      const status = { ...started, inviteLink, inviteBoardId: boardId, inviteRole: role };
       setHostStatus(status);
       hostingRef.current = true;
       const next = reduceCollab(collabRef.current, {
@@ -1214,12 +1218,12 @@ function App() {
       setShareBusy(false);
     }
   };
-  const revokeShare = async () => {
+  const revokeShare = async (boardId: string, role: "view" | "edit") => {
     setShareBusy(true);
     setShareError("");
     try {
-      const inviteLink = await collabApi.inviteRevoke();
-      setHostStatus((status) => ({ ...status, inviteLink }));
+      const inviteLink = await collabApi.inviteRevoke(boardId, role);
+      setHostStatus((status) => ({ ...status, inviteLink, inviteBoardId: boardId, inviteRole: role }));
       setToast("Предыдущая ссылка отозвана, выдана новая");
     } catch (e) {
       setShareError(String(e));
@@ -1982,11 +1986,13 @@ function App() {
           open={shareOpen}
           onOpenChange={setShareOpen}
           status={hostStatus}
+          boards={live.current.workspace.boards.map(({ id, name }) => ({ id, name }))}
+          selectedBoardId={live.current.workspace.selectedBoardId}
           settings={shareSettings}
           onSettings={setShareSettings}
-          onStart={() => void startShare()}
+          onStart={(boardId, role) => void startShare(boardId, role)}
           onStop={() => void stopShare()}
-          onRevoke={() => void revokeShare()}
+          onRevoke={(boardId, role) => void revokeShare(boardId, role)}
           busy={shareBusy}
           error={shareError}
         />

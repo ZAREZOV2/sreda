@@ -17,6 +17,8 @@ import {
 const host = {
   workspaceId: "ws_alpha",
   hostId: "host_demo",
+  boardId: "b1",
+  role: "edit" as const,
 };
 
 function invite(overrides: Partial<Parameters<typeof createInvite>[0]> = {}) {
@@ -32,7 +34,7 @@ function guest(overrides: Partial<GuestBoard> = {}): GuestBoard {
   return {
     workspaceId: host.workspaceId,
     hostId: host.hostId,
-    board: newBoard("Удалённая доска"),
+    board: { ...newBoard("Удалённая доска"), id: host.boardId },
     status: "disconnected",
     inviteUrl: "https://first.ngrok-free.app",
     staticDomain: false,
@@ -42,6 +44,7 @@ function guest(overrides: Partial<GuestBoard> = {}): GuestBoard {
 
 function board(name: string): Board {
   const value = newBoard(name);
+  value.id = host.boardId;
   value.description = "Состояние хозяина";
   return value;
 }
@@ -82,7 +85,7 @@ test("a new invite with the same workspaceId updates the disconnected board inst
   assert.equal(result.board.inviteUrl, "https://second.ngrok-free.app");
   assert.equal(result.board.board.name, "Актуальная доска");
   assert.equal(result.board.board.description, "Состояние хозяина");
-  assert.notEqual(result.board.board.id, stale.board.id);
+  assert.equal(result.board.board.id, stale.board.id);
 });
 
 test("a different workspaceId or host identity creates a new guest board", () => {
@@ -160,7 +163,7 @@ test("parseInviteLink rejects malformed input", () => {
   );
   assert.throws(() => parseInviteLink("sreda-invite=%%%"), /не ссылка|Некорректная/);
   const broken = invite();
-  (broken as { version: number }).version = 2;
+  (broken as { version: number }).version = 1;
   const encoded = encodeInviteLink({ ...invite(), url: "https://ok.example" });
   // version is baked in encodeInviteLink via createInvite, so craft a bad hash manually
   assert.throws(
@@ -169,4 +172,38 @@ test("parseInviteLink rejects malformed input", () => {
   );
   void broken;
   void encoded;
+});
+
+test("version 1 links without a board scope never grant workspace access", () => {
+  const legacy = { ...invite(), version: 1 };
+  const encoded = Buffer.from(JSON.stringify(legacy)).toString("base64url");
+  assert.throws(
+    () => parseInviteLink("https://sreda.example/#sreda-invite=" + encoded),
+    /версии 2/,
+  );
+});
+
+test("a link missing the role or board id is rejected", () => {
+  for (const key of ["role", "boardId"]) {
+    const malformed: Record<string, unknown> = { ...invite() };
+    delete malformed[key];
+    const encoded = Buffer.from(JSON.stringify(malformed)).toString("base64url");
+    assert.throws(
+      () => parseInviteLink("https://sreda.example/#sreda-invite=" + encoded),
+      /Некорректная/,
+    );
+  }
+});
+
+test("invites for two boards of one host stay separate", () => {
+  const first = guest();
+  const second = board("Вторая доска");
+  second.id = "b2";
+  const otherInvite = invite({ boardId: "b2", role: "view" });
+  const result = applyInvite([first], otherInvite, second);
+  assert.equal(result.action, "create");
+  assert.equal(result.records.length, 2);
+  assert.equal(result.records[0].board.id, "b1");
+  assert.equal(result.records[1].board.id, "b2");
+  assert.throws(() => applyInvite([], otherInvite, first.board), /вне области/);
 });

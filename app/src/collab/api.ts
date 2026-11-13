@@ -13,6 +13,8 @@ export type HostStatus = {
   running: boolean;
   publicUrl?: string | null;
   inviteLink?: string | null;
+  inviteBoardId?: string | null;
+  inviteRole?: "view" | "edit" | null;
   staticDomain: boolean;
   workspaceId?: string | null;
   hostId?: string | null;
@@ -55,12 +57,12 @@ export async function hostSetProfile(
   await invoke("collab_host_set_profile", { profile: { name, color } });
 }
 
-export async function inviteIssue(): Promise<string> {
-  return invoke<string>("collab_invite_issue");
+export async function inviteIssue(boardId: string, role: "view" | "edit"): Promise<string> {
+  return invoke<string>("collab_invite_issue", { boardId, role });
 }
 
-export async function inviteRevoke(): Promise<string> {
-  return invoke<string>("collab_invite_revoke");
+export async function inviteRevoke(boardId: string, role: "view" | "edit"): Promise<string> {
+  return invoke<string>("collab_invite_revoke", { boardId, role });
 }
 
 export async function hostPush(

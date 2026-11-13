@@ -17,6 +17,10 @@ The full guide is in Russian: [README.md](README.md). This page is the short Eng
 
 Download [Sreda_0.3.0_x64-setup.exe](https://github.com/ZAREZOV2/sreda/releases/download/v0.3.0/Sreda_0.3.0_x64-setup.exe) from the [v0.3.0 release](https://github.com/ZAREZOV2/sreda/releases/tag/v0.3.0). The installer fetches WebView2 if it is missing. Data stays in `%LOCALAPPDATA%\local.sreda.kanban`.
 
+## Collaboration and access control
+
+Without ngrok, the collaboration WebSocket server listens on `127.0.0.1` only. Other computers on the LAN **cannot** connect; a tunnel is required for remote access. An invite (v2) is scoped to one board and one role: **view** or **edit**. Guests cannot read or overwrite other boards. Previous v1 links must be reissued.
+
 ## Build
 
 Windows, Node.js 22.16+, Rust 1.90+ (MSVC), the Visual Studio C++ build tools and WebView2.

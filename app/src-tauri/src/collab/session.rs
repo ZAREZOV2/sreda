@@ -79,6 +79,7 @@ pub struct Peer {
     pub color: String,
     pub token: String,
     pub selected_board_id: Option<String>,
+    pub board_id: String,
     pub role: String,
     pub tx: mpsc::Sender<ServerMessage>,
 }
@@ -97,6 +98,72 @@ pub struct SessionInner {
 }
 
 impl SessionInner {
+    /// Never send a guest a snapshot containing boards outside their invitation.
+    pub fn scoped_snapshot(&self, board_id: &str) -> Option<Snapshot> {
+        let board = self.snapshot.workspace.boards.iter()
+            .find(|board| board.id == board_id)?.clone();
+        Some(Snapshot {
+            revision: self.snapshot.revision,
+            workspace: Workspace {
+                schema_version: self.snapshot.workspace.schema_version,
+                boards: vec![board],
+                selected_board_id: Some(board_id.to_string()),
+            },
+        })
+    }
+
+    pub fn scoped_participants(&self, board_id: &str) -> Vec<Participant> {
+        let mut participants = vec![Participant {
+            id: self.identity.host_id.clone(),
+            name: self.host_name.clone(),
+            selected_board_id: Some(board_id.to_string()),
+            role: "host".into(),
+            color: Some(self.host_color.clone()),
+        }];
+        participants.extend(self.peers.values()
+            .filter(|peer| peer.board_id == board_id)
+            .map(|peer| Participant {
+                id: peer.id.clone(),
+                name: peer.name.clone(),
+                selected_board_id: Some(board_id.to_string()),
+                role: peer.role.clone(),
+                color: Some(peer.color.clone()),
+            }));
+        participants
+    }
+
+    /// A guest may replace only the board named by their active, editable invitation.
+    /// All other host data is kept from the current authoritative snapshot.
+    pub fn apply_guest_push(
+        &mut self,
+        guest_id: &str,
+        expected_revision: i64,
+        workspace: Workspace,
+    ) -> Result<(i64, Workspace), (String, Snapshot)> {
+        let fail = |message: &str, snapshot: &Snapshot| (message.to_string(), snapshot.clone());
+        let peer = self.peers.get(guest_id)
+            .ok_or_else(|| fail("Участник не найден", &self.snapshot))?;
+        if peer.role != "edit" {
+            return Err(fail("Это приглашение разрешает только просмотр", &self.snapshot));
+        }
+        let board_id = peer.board_id.clone();
+        if workspace.boards.len() != 1
+            || workspace.boards[0].id != board_id
+            || workspace.selected_board_id.as_deref() != Some(board_id.as_str())
+        {
+            return Err(fail("Разрешено изменять только приглашённую доску", &self.snapshot));
+        }
+        storage::validate(&workspace)
+            .map_err(|message| (message, self.snapshot.clone()))?;
+        let mut merged = self.snapshot.workspace.clone();
+        let host_board = merged.boards.iter_mut().find(|board| board.id == board_id)
+            .ok_or_else(|| fail("Доска больше недоступна", &self.snapshot))?;
+        *host_board = workspace.boards[0].clone();
+        storage::validate(&merged)
+            .map_err(|message| (message, self.snapshot.clone()))?;
+        self.apply_push(expected_revision, merged, guest_id)
+    }
+
     pub fn participants(&self) -> Vec<Participant> {
         let mut list = vec![Participant {
             id: self.identity.host_id.clone(),
@@ -192,14 +259,20 @@ impl Session {
         }
     }
 
-    pub async fn issue_invite(&self) -> Result<String, String> {
+    pub async fn issue_invite(&self, board_id: &str, role: &str) -> Result<String, String> {
         let mut inner = self.inner.lock().await;
+        if role != "view" && role != "edit" {
+            return Err("Недопустимая роль приглашения".into());
+        }
+        if !inner.snapshot.workspace.boards.iter().any(|board| board.id == board_id) {
+            return Err("Выберите существующую доску".into());
+        }
         for token in &mut inner.tokens {
             token.revoked = true;
         }
         let kicked: Vec<mpsc::Sender<ServerMessage>> =
             inner.peers.values().map(|peer| peer.tx.clone()).collect();
-        let (encoded, token) = InviteToken::issue(TOKEN_TTL);
+        let (encoded, token) = InviteToken::issue(TOKEN_TTL, board_id.into(), role.into());
         inner.tokens.push(token);
         inner.current_invite = Some(encoded.clone());
         drop(inner);
@@ -215,17 +288,28 @@ impl Session {
     }
 
     pub async fn revoke_current(&self) -> Result<String, String> {
-        self.issue_invite().await
+        let (board_id, role) = {
+            let inner = self.inner.lock().await;
+            let current = inner.current_invite.as_deref().ok_or("Нет приглашения")?;
+            let token = inner.tokens.iter().find(|t| t.id == current).ok_or("Нет приглашения")?;
+            (token.board_id.clone(), token.role.clone())
+        };
+        self.issue_invite(&board_id, &role).await
     }
 
     pub async fn encode_invite_link(&self, token: &str) -> String {
         let inner = self.inner.lock().await;
+        let Some(invite) = inner.tokens.iter().find(|item| item.id == token) else {
+            return String::new();
+        };
         encode_invite_link(
             &inner.public_url,
             &inner.identity.workspace_id,
             &inner.identity.host_id,
             inner.static_domain,
             token,
+            &invite.board_id,
+            &invite.role,
         )
     }
 
@@ -235,17 +319,33 @@ impl Session {
     }
 
     pub async fn broadcast(&self, message: ServerMessage, except: Option<&str>) {
-        let peers: Vec<mpsc::Sender<ServerMessage>> = {
+        let messages: Vec<(mpsc::Sender<ServerMessage>, ServerMessage)> = {
             let inner = self.inner.lock().await;
-            inner
-                .peers
-                .values()
+            inner.peers.values()
                 .filter(|peer| except.is_none_or(|id| peer.id != id))
-                .map(|peer| peer.tx.clone())
+                .map(|peer| {
+                    let scoped = match &message {
+                        ServerMessage::State { revision, origin_id, .. } => {
+                            match inner.scoped_snapshot(&peer.board_id) {
+                                Some(snapshot) => ServerMessage::State {
+                                    revision: *revision,
+                                    workspace: snapshot.workspace,
+                                    origin_id: origin_id.clone(),
+                                },
+                                None => ServerMessage::Shutdown { reason: "board_removed".into() },
+                            }
+                        }
+                        ServerMessage::Presence { .. } => ServerMessage::Presence {
+                            participants: inner.scoped_participants(&peer.board_id),
+                        },
+                        _ => message.clone(),
+                    };
+                    (peer.tx.clone(), scoped)
+                })
                 .collect()
         };
-        for tx in peers {
-            let _ = tx.send(message.clone()).await;
+        for (tx, scoped) in messages {
+            let _ = tx.send(scoped).await;
         }
     }
 
@@ -274,10 +374,14 @@ pub fn encode_invite_link(
     host_id: &str,
     static_domain: bool,
     token: &str,
+    board_id: &str,
+    role: &str,
 ) -> String {
     let payload = serde_json::json!({
         "format": "sreda-invite",
-        "version": 1,
+        "version": 2,
+        "boardId": board_id,
+        "role": role,
         "workspaceId": workspace_id,
         "hostId": host_id,
         "url": public_url.trim_end_matches('/'),
@@ -303,6 +407,13 @@ pub fn parse_invite_token(link_or_token: &str) -> Result<String, String> {
             .map_err(|_| "Некорректная ссылка-приглашение".to_string())?;
         let value: serde_json::Value = serde_json::from_slice(&bytes)
             .map_err(|_| "Некорректная ссылка-приглашение".to_string())?;
+        if value.get("format").and_then(|v| v.as_str()) != Some("sreda-invite")
+            || value.get("version").and_then(|v| v.as_u64()) != Some(2)
+            || value.get("boardId").and_then(|v| v.as_str()).is_none()
+            || !matches!(value.get("role").and_then(|v| v.as_str()), Some("view" | "edit"))
+        {
+            return Err("Приглашение устарело или не содержит прав доступа".into());
+        }
         value
             .get("token")
             .and_then(|v| v.as_str())

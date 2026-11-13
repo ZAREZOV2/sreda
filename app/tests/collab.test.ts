@@ -17,9 +17,11 @@ import type { GuestBoard, InvitePayload } from "../src/share.ts";
 
 const invite: InvitePayload = {
   format: "sreda-invite",
-  version: 1,
+  version: 2,
   workspaceId: "ws_alpha",
   hostId: "host_demo",
+  boardId: "b1",
+  role: "edit",
   url: "https://sreda.ngrok.app",
   staticDomain: true,
   token: "a".repeat(43),
@@ -112,6 +114,7 @@ test("auto-reconnect is allowed only when a static domain is configured", () => 
 
 test("close flow can keep a disconnected board or save a local copy without duplicating later", () => {
   const board = newBoard("Гостевая");
+  board.id = invite.boardId;
   const records: GuestBoard[] = [
     {
       workspaceId: invite.workspaceId,
@@ -137,7 +140,9 @@ test("close flow can keep a disconnected board or save a local copy without dupl
   assert.equal(saved.localCopies.length, 1);
   assert.notEqual(saved.localCopies[0].id, board.id);
 
-  const reattached = reattachOrCreate(kept.records, invite, newBoard("Снова онлайн"));
+  const again = newBoard("Снова онлайн");
+  again.id = invite.boardId;
+  const reattached = reattachOrCreate(kept.records, invite, again);
   assert.equal(reattached.action, "reattach");
   assert.equal(reattached.records.length, 1);
   assert.equal(reattached.board.status, "connected");
@@ -155,10 +160,12 @@ test("a different workspace still creates a separate guest board", () => {
       staticDomain: false,
     },
   ];
+  const otherBoard = newBoard("Другая");
+  otherBoard.id = invite.boardId;
   const created = reattachOrCreate(
     existing,
     { ...invite, workspaceId: "ws_other" },
-    newBoard("Другая"),
+    otherBoard,
   );
   assert.equal(created.action, "create");
   assert.equal(created.records.length, 2);
@@ -212,9 +219,11 @@ test("join form requires a valid invite and a guest name", () => {
   assert.equal(bad.name, "Укажите, как вас представлять.");
   const link = encodeInviteLink({
     format: "sreda-invite",
-    version: 1,
+    version: 2,
     workspaceId: "ws_alpha",
     hostId: "host_demo",
+    boardId: "b1",
+    role: "edit",
     url: "https://sreda.ngrok.app",
     staticDomain: true,
     token: "a".repeat(43),

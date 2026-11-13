@@ -35,6 +35,8 @@ pub struct HostStatus {
     pub running: bool,
     pub public_url: Option<String>,
     pub invite_link: Option<String>,
+    pub invite_board_id: Option<String>,
+    pub invite_role: Option<String>,
     pub static_domain: bool,
     pub workspace_id: Option<String>,
     pub host_id: Option<String>,
@@ -44,22 +46,23 @@ pub struct HostStatus {
 impl HostHandle {
     pub async fn status(&self) -> HostStatus {
         let inner = self.session.inner.lock().await;
-        let token = inner.current_invite.clone().unwrap_or_default();
-        let invite_link = if token.is_empty() {
-            None
-        } else {
-            Some(session::encode_invite_link(
-                &inner.public_url,
-                &inner.identity.workspace_id,
-                &inner.identity.host_id,
-                inner.static_domain,
-                &token,
-            ))
-        };
+        let current = inner.current_invite.as_deref()
+            .and_then(|encoded| inner.tokens.iter().find(|token| token.id == encoded));
+        let invite_link = current.map(|token| session::encode_invite_link(
+            &inner.public_url,
+            &inner.identity.workspace_id,
+            &inner.identity.host_id,
+            inner.static_domain,
+            &token.id,
+            &token.board_id,
+            &token.role,
+        ));
         HostStatus {
             running: true,
             public_url: Some(inner.public_url.clone()),
             invite_link,
+            invite_board_id: current.map(|token| token.board_id.clone()),
+            invite_role: current.map(|token| token.role.clone()),
             static_domain: inner.static_domain,
             workspace_id: Some(inner.identity.workspace_id.clone()),
             host_id: Some(inner.identity.host_id.clone()),
@@ -71,13 +74,13 @@ impl HostHandle {
         self.session.events.subscribe()
     }
 
-    pub async fn issue_invite(&self) -> Result<String, String> {
-        let token = self.session.issue_invite().await?;
+    pub async fn issue_invite(&self, board_id: &str, role: &str) -> Result<String, String> {
+        let token = self.session.issue_invite(board_id, role).await?;
         Ok(self.session.encode_invite_link(&token).await)
     }
 
-    pub async fn revoke(&self) -> Result<String, String> {
-        self.issue_invite().await
+    pub async fn revoke(&self, board_id: &str, role: &str) -> Result<String, String> {
+        self.issue_invite(board_id, role).await
     }
 
     pub async fn push_local(
@@ -173,9 +176,7 @@ pub async fn start(
         public_url.clone(),
         static_domain,
     );
-    let token = session.issue_invite().await?;
-    let _ = token;
-    let (shutdown, shutdown_rx) = tokio::sync::watch::channel(false);
+     let (shutdown, shutdown_rx) = tokio::sync::watch::channel(false);
     let router = Router::new()
         .route("/ws", get(upgrade_ws))
         .route("/health", get(|| async { "ok" }))
@@ -239,7 +240,7 @@ async fn handle_socket(socket: WebSocket, session: Session) {
     let (welcome, guest_id) = {
         let mut inner = session.inner.lock().await;
         let now = Instant::now();
-        if token::find_active(&inner.tokens, &token, now).is_none() {
+        let Some(token_index) = token::find_active(&inner.tokens, &token, now) else {
             drop(inner);
             let _ = send(
                 &mut sink,
@@ -249,7 +250,15 @@ async fn handle_socket(socket: WebSocket, session: Session) {
             )
             .await;
             return;
-        }
+        };
+        let invite = inner.tokens[token_index].clone();
+        let Some(scoped_snapshot) = inner.scoped_snapshot(&invite.board_id) else {
+            drop(inner);
+            let _ = send(&mut sink, ServerMessage::Error {
+                message: "Доска из приглашения больше недоступна".into(),
+            }).await;
+            return;
+        };
         if inner.peers.len() >= MAX_CONNECTIONS {
             drop(inner);
             let _ = send(
@@ -262,7 +271,7 @@ async fn handle_socket(socket: WebSocket, session: Session) {
             return;
         }
         let guest_id = unique_guest_id(&inner, &guest_id);
-        let selected_board_id = inner.snapshot.workspace.selected_board_id.clone();
+        let selected_board_id = Some(invite.board_id.clone());
         inner.peers.insert(
             guest_id.clone(),
             crate::collab::session::Peer {
@@ -271,7 +280,8 @@ async fn handle_socket(socket: WebSocket, session: Session) {
                 color: sanitize_color(color.as_deref()),
                 token: token.clone(),
                 selected_board_id,
-                role: "guest".into(),
+                board_id: invite.board_id.clone(),
+                role: invite.role.clone(),
                 tx: peer_tx,
             },
         );
@@ -279,10 +289,10 @@ async fn handle_socket(socket: WebSocket, session: Session) {
             ServerMessage::Welcome {
                 workspace_id: inner.identity.workspace_id.clone(),
                 host_id: inner.identity.host_id.clone(),
-                snapshot: inner.snapshot.clone(),
+                snapshot: scoped_snapshot,
                 self_id: guest_id.clone(),
                 static_domain: inner.static_domain,
-                participants: inner.participants(),
+                participants: inner.scoped_participants(&invite.board_id),
             },
             guest_id,
         )
@@ -386,7 +396,9 @@ async fn handle_client(session: &Session, guest_id: &str, bytes: &[u8]) -> Resul
                 if let Some(peer) = inner.peers.get_mut(guest_id) {
                     peer.name = sanitize_name(&name);
                     peer.color = sanitize_color(color.as_deref());
-                    peer.selected_board_id = selected_board_id;
+                    peer.selected_board_id = selected_board_id
+                        .filter(|id| id == &peer.board_id)
+                        .or_else(|| Some(peer.board_id.clone()));
                 }
             }
             session.emit_presence().await;
@@ -398,7 +410,7 @@ async fn handle_client(session: &Session, guest_id: &str, bytes: &[u8]) -> Resul
         } => {
             let result = {
                 let mut inner = session.inner.lock().await;
-                inner.apply_push(expected_revision, workspace, guest_id)
+                inner.apply_guest_push(guest_id, expected_revision, workspace)
             };
             match result {
                 Ok((revision, workspace)) => {
@@ -422,23 +434,36 @@ async fn handle_client(session: &Session, guest_id: &str, bytes: &[u8]) -> Resul
                         .await;
                     Ok(())
                 }
-                Err((message, snapshot)) => {
-                    let inner = session.inner.lock().await;
-                    if let Some(peer) = inner.peers.get(guest_id) {
-                        let _ = peer
-                            .tx
-                            .send(ServerMessage::Rejected {
-                                expected_revision: snapshot.revision,
-                                message,
-                                snapshot,
-                            })
-                            .await;
+                Err((message, _snapshot)) => {
+                    let response = {
+                        let inner = session.inner.lock().await;
+                        inner.peers.get(guest_id).map(|peer| {
+                            let answer = match inner.scoped_snapshot(&peer.board_id) {
+                                Some(scoped) => ServerMessage::Rejected {
+                                    expected_revision: scoped.revision,
+                                    message,
+                                    snapshot: scoped,
+                                },
+                                None => ServerMessage::Shutdown { reason: "board_removed".into() },
+                            };
+                            (peer.tx.clone(), answer)
+                        })
+                    };
+                    if let Some((tx, answer)) = response {
+                        let _ = tx.send(answer).await;
                     }
                     Ok(())
                 }
             }
         }
         ClientMessage::ShareTheme { theme } => {
+            let can_edit = {
+                let inner = session.inner.lock().await;
+                inner.peers.get(guest_id).is_some_and(|peer| peer.role == "edit")
+            };
+            if !can_edit {
+                return Err("Это приглашение разрешает только просмотр".into());
+            }
             if theme.len() > 100_000 || theme_forbidden(&theme) {
                 return Err("Тема не прошла проверку".into());
             }
@@ -565,6 +590,7 @@ mod tests {
         let handle = start(temp_db(), identity(), IngressSettings::default())
             .await
             .unwrap();
+        handle.issue_invite("b1", "edit").await.unwrap();
         let status = handle.status().await;
         let token = handle
             .session
@@ -679,7 +705,7 @@ mod tests {
             .current_invite
             .clone()
             .unwrap();
-        let _new_link = host.revoke().await.unwrap();
+        let _new_link = host.revoke("b1", "edit").await.unwrap();
         let mut socket = connect(&url, &old, "late").await;
         let msg = next_json(&mut socket).await;
         assert_eq!(msg["type"], "error");
@@ -722,4 +748,147 @@ mod tests {
             .expect("shutdown delivered")
             .unwrap();
     }
+
+    fn sample_two_boards() -> Workspace {
+        let mut workspace = sample();
+        let mut secret = workspace.boards[0].clone();
+        secret.id = "b2".into();
+        secret.name = "Секретная доска".into();
+        for column in &mut secret.columns {
+            column.id = format!("secret_{}", column.id);
+        }
+        workspace.boards.push(secret);
+        workspace
+    }
+
+    async fn next_type(
+        socket: &mut tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        expected: &str,
+    ) -> serde_json::Value {
+        for _ in 0..16 {
+            let message = next_json(socket).await;
+            if message["type"] == expected {
+                return message;
+            }
+        }
+        panic!("message type {expected} not received");
+    }
+
+    #[tokio::test]
+    async fn invited_guest_sees_only_its_board_in_welcome_and_state() {
+        let (host, url) = boot().await;
+        host.push_local(sample_two_boards(), 1).await.unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "alice").await;
+        let welcome = next_type(&mut guest, "welcome").await;
+        assert_eq!(welcome["snapshot"]["workspace"]["boards"].as_array().unwrap().len(), 1);
+        assert_eq!(welcome["snapshot"]["workspace"]["boards"][0]["id"], "b1");
+        assert!(!welcome.to_string().contains("Секретная доска"));
+
+        let mut changed = sample_two_boards();
+        changed.boards[1].name = "Ещё один секрет".into();
+        host.push_local(changed, 2).await.unwrap();
+        let state = next_type(&mut guest, "state").await;
+        assert_eq!(state["workspace"]["boards"].as_array().unwrap().len(), 1);
+        assert_eq!(state["workspace"]["boards"][0]["id"], "b1");
+        assert!(!state.to_string().contains("Ещё один секрет"));
+        host.stop().await;
+    }
+
+    #[tokio::test]
+    async fn guest_cannot_push_other_boards_or_remove_host_boards() {
+        let (host, url) = boot().await;
+        host.push_local(sample_two_boards(), 1).await.unwrap();
+        let db_path = host.session.inner.lock().await.db_path.clone();
+        let before = storage::load(&db_path).unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "malicious").await;
+        next_type(&mut guest, "welcome").await;
+
+        for mut forged in [sample_two_boards(), sample_two_boards()] {
+            // Try to send the entire host workspace and then only the *other* board.
+            if forged.boards.len() == 2 {
+                if forged.boards[1].name == "Секретная доска" {
+                    forged.boards[1].name = "Украдено".into();
+                }
+            }
+            let message = serde_json::json!({
+                "type": "push",
+                "expectedRevision": before.revision,
+                "workspace": forged
+            });
+            guest.send(TMessage::Text(message.to_string().into())).await.unwrap();
+            let rejected = next_type(&mut guest, "rejected").await;
+            assert_eq!(rejected["snapshot"]["workspace"]["boards"].as_array().unwrap().len(), 1);
+            assert_eq!(storage::load(&db_path).unwrap().workspace, before.workspace);
+        }
+        let mut only_other = sample_two_boards();
+        only_other.boards.remove(0);
+        only_other.selected_board_id = Some("b2".into());
+        let forged = serde_json::json!({
+            "type": "push",
+            "expectedRevision": before.revision,
+            "workspace": only_other,
+        });
+        guest.send(TMessage::Text(forged.to_string().into())).await.unwrap();
+        next_type(&mut guest, "rejected").await;
+        assert_eq!(storage::load(&db_path).unwrap().workspace, before.workspace);
+        host.stop().await;
+    }
+
+    #[tokio::test]
+    async fn view_only_invite_rejects_all_guest_writes() {
+        let (host, url) = boot().await;
+        host.issue_invite("b1", "view").await.unwrap();
+        let db_path = host.session.inner.lock().await.db_path.clone();
+        let before = storage::load(&db_path).unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "viewer").await;
+        next_type(&mut guest, "welcome").await;
+        let push = serde_json::json!({
+            "type": "push", "expectedRevision": before.revision, "workspace": sample()
+        });
+        guest.send(TMessage::Text(push.to_string().into())).await.unwrap();
+        let rejected = next_type(&mut guest, "rejected").await;
+        assert!(rejected["message"].as_str().unwrap().contains("просмотр"));
+        assert_eq!(storage::load(&db_path).unwrap().workspace, before.workspace);
+        host.stop().await;
+    }
+
+    #[tokio::test]
+    async fn edit_invite_can_change_card_without_touching_other_board() {
+        let (host, url) = boot().await;
+        host.push_local(sample_two_boards(), 1).await.unwrap();
+        let db_path = host.session.inner.lock().await.db_path.clone();
+        let before = storage::load(&db_path).unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "editor").await;
+        let welcome = next_type(&mut guest, "welcome").await;
+        let mut workspace: Workspace = serde_json::from_value(welcome["snapshot"]["workspace"].clone()).unwrap();
+        let task = serde_json::json!({
+            "id": "t1",
+            "title": "Изменённая карточка",
+            "description": "",
+            "label": "",
+            "color": "sage",
+            "priority": "medium"
+        });
+        workspace.boards[0].columns[0].tasks.push(serde_json::from_value(task).unwrap());
+        let push = serde_json::json!({
+            "type": "push", "expectedRevision": before.revision, "workspace": workspace
+        });
+        guest.send(TMessage::Text(push.to_string().into())).await.unwrap();
+        let state = next_type(&mut guest, "state").await;
+        assert_eq!(state["workspace"]["boards"].as_array().unwrap().len(), 1);
+        let after = storage::load(&db_path).unwrap();
+        assert_eq!(after.workspace.boards[0].columns[0].tasks[0].title, "Изменённая карточка");
+        assert_eq!(
+            serde_json::to_vec(&after.workspace.boards[1]).unwrap(),
+            serde_json::to_vec(&before.workspace.boards[1]).unwrap()
+        );
+        host.stop().await;
+    }
+
 }

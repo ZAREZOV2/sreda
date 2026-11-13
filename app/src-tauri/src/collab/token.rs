@@ -11,10 +11,12 @@ pub struct InviteToken {
     secret: [u8; TOKEN_BYTES],
     pub expires_at: Instant,
     pub revoked: bool,
+    pub board_id: String,
+    pub role: String,
 }
 
 impl InviteToken {
-    pub fn issue(ttl: Duration) -> (String, Self) {
+    pub fn issue(ttl: Duration, board_id: String, role: String) -> (String, Self) {
         let mut secret = [0u8; TOKEN_BYTES];
         rand::rngs::OsRng.fill_bytes(&mut secret);
         let encoded = URL_SAFE_NO_PAD.encode(secret);
@@ -23,6 +25,8 @@ impl InviteToken {
             secret,
             expires_at: Instant::now() + ttl,
             revoked: false,
+            board_id,
+            role,
         };
         (encoded, token)
     }
@@ -65,7 +69,7 @@ mod tests {
 
     #[test]
     fn issued_token_matches_constant_time_and_revoked_does_not() {
-        let (encoded, mut token) = InviteToken::issue(Duration::from_secs(60));
+        let (encoded, mut token) = InviteToken::issue(Duration::from_secs(60), "b1".into(), "edit".into());
         assert!(encoded.len() >= 43);
         let tokens = vec![token.clone()];
         assert_eq!(find_active(&tokens, &encoded, Instant::now()), Some(0));
@@ -76,7 +80,7 @@ mod tests {
 
     #[test]
     fn expired_token_is_rejected() {
-        let (encoded, mut token) = InviteToken::issue(Duration::from_secs(60));
+        let (encoded, mut token) = InviteToken::issue(Duration::from_secs(60), "b1".into(), "edit".into());
         token.expires_at = Instant::now() - Duration::from_secs(1);
         assert_eq!(find_active(&[token], &encoded, Instant::now()), None);
     }
