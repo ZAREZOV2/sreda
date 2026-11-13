@@ -2817,9 +2817,9 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "ngrok"
-version = "0.16.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3ea65f6e7e2ab22652873e8456d876e4f0d6e3b6ace07569dbe924e7d6ae68a"
+checksum = "10f6c455d972d973dded17538cb01426ca79eccb9774ae8ab8f1af637f469f3f"
 dependencies = [
  "arc-swap",
  "async-trait",
