@@ -6,6 +6,7 @@ description = "Local Kanban board"
 repository = "https://github.com/ZAREZOV2/sreda"
 edition = "2021"
 rust-version = "1.90"
+default-run = "sreda-kanban"
 
 [lib]
 name = "sreda_kanban_lib"
@@ -19,11 +20,13 @@ required-features = ["desktop"]
 [[bin]]
 name = "sreda-mcp"
 path = "src/mcp_main.rs"
+required-features = ["mcp-bin"]
 
 [features]
-default = ["desktop", "custom-protocol"]
+default = ["desktop", "custom-protocol", "mcp-bin"]
 desktop = ["dep:tauri", "dep:rfd", "dep:tauri-build", "dep:notify-rust"]
 custom-protocol = ["desktop", "tauri/custom-protocol"]
+mcp-bin = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [], optional = true }
@@ -33,7 +36,7 @@ tauri = { version = "2", features = [], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.38", features = ["bundled"] }
-rfd = { version = "0.15", optional = true }
+rfd = { version = "0.15", optional = true, default-features = false, features = ["xdg-portal", "tokio"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net"] }
 axum = { version = "0.8", features = ["ws"] }
 tower-http = { version = "0.6", features = ["limit"] }

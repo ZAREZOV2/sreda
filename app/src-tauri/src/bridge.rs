@@ -177,7 +177,7 @@ fn mcp_clients(app: AppHandle) -> Result<Vec<ops::ClientSeen>, String> {
 #[tauri::command]
 fn mcp_binary_path() -> String {
     let exe = std::env::current_exe().unwrap_or_default();
-    let name = if cfg!(windows) { "sreda-mcp.exe" } else { "sreda-mcp" };
+    let name = crate::mcp::config::sidecar_runtime_filename();
     exe.parent().unwrap_or(std::path::Path::new(".")).join(name).to_string_lossy().into_owned()
 }
 
