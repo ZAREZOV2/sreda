@@ -16,9 +16,11 @@ export type GuestBoard = {
 
 export type InvitePayload = {
   format: "sreda-invite";
-  version: 1;
+  version: 2;
   workspaceId: string;
   hostId: string;
+  boardId: string;
+  role: "view" | "edit";
   url: string;
   staticDomain: boolean;
   token?: string;
@@ -58,6 +60,8 @@ function requiredId(value: string, label: string): string {
 export function createInvite(input: {
   workspaceId: string;
   hostId: string;
+  boardId: string;
+  role: "view" | "edit";
   url: string;
   staticDomain: boolean;
   token?: string;
@@ -69,9 +73,13 @@ export function createInvite(input: {
     throw Error("Некорректный токен приглашения");
   return {
     format: "sreda-invite",
-    version: 1,
+    version: 2,
     workspaceId: requiredId(input.workspaceId, "идентификатор пространства"),
     hostId: requiredId(input.hostId, "идентификатор владельца"),
+    boardId: requiredId(input.boardId, "идентификатор доски"),
+    role: input.role === "view" || input.role === "edit"
+      ? input.role
+      : (() => { throw Error("Некорректные права доступа"); })(),
     url,
     staticDomain: !!input.staticDomain,
     ...(token ? { token } : {}),
@@ -107,17 +115,20 @@ function decodePayload(encoded: string): InvitePayload {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw Error("Некорректная ссылка-приглашение");
   const o = value as Record<string, unknown>;
-  if (o.format !== "sreda-invite" || o.version !== 1)
-    throw Error("Ожидалась ссылка-приглашение Среда версии 1");
+  if (o.format !== "sreda-invite" || o.version !== 2)
+    throw Error("Ожидалась ссылка-приглашение Среда версии 2");
   if (typeof o.url !== "string" || typeof o.staticDomain !== "boolean")
     throw Error("Некорректная ссылка-приглашение");
-  if (typeof o.workspaceId !== "string" || typeof o.hostId !== "string")
+  if (typeof o.workspaceId !== "string" || typeof o.hostId !== "string"
+    || typeof o.boardId !== "string" || (o.role !== "view" && o.role !== "edit"))
     throw Error("Некорректная ссылка-приглашение");
   if (o.token !== undefined && typeof o.token !== "string")
     throw Error("Некорректная ссылка-приглашение");
   return createInvite({
     workspaceId: o.workspaceId,
     hostId: o.hostId,
+    boardId: o.boardId,
+    role: o.role,
     url: o.url,
     staticDomain: o.staticDomain,
     token: typeof o.token === "string" ? o.token : undefined,
@@ -156,7 +167,9 @@ export function resolveInvite(
   records: GuestBoard[],
   invite: InvitePayload,
 ): InviteResolution {
-  const target = records.find((record) => sameSharedWorkspace(record, invite));
+  const target = records.find(
+    (record) => sameSharedWorkspace(record, invite) && record.board.id === invite.boardId,
+  );
   if (target) return { action: "reattach", target };
   return { action: "create" };
 }
@@ -168,6 +181,8 @@ export function applyInvite(
 ): { records: GuestBoard[]; action: "reattach" | "create"; board: GuestBoard } {
   validateBoard(hostBoard);
   const payload = createInvite(invite);
+  if (hostBoard.id !== payload.boardId)
+    throw Error("Сервер прислал доску вне области приглашения");
   const next: GuestBoard = {
     workspaceId: payload.workspaceId,
     hostId: payload.hostId,
