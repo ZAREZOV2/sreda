@@ -748,4 +748,147 @@ mod tests {
             .expect("shutdown delivered")
             .unwrap();
     }
+
+    fn sample_two_boards() -> Workspace {
+        let mut workspace = sample();
+        let mut secret = workspace.boards[0].clone();
+        secret.id = "b2".into();
+        secret.name = "Секретная доска".into();
+        for column in &mut secret.columns {
+            column.id = format!("secret_{}", column.id);
+        }
+        workspace.boards.push(secret);
+        workspace
+    }
+
+    async fn next_type(
+        socket: &mut tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        expected: &str,
+    ) -> serde_json::Value {
+        for _ in 0..16 {
+            let message = next_json(socket).await;
+            if message["type"] == expected {
+                return message;
+            }
+        }
+        panic!("message type {expected} not received");
+    }
+
+    #[tokio::test]
+    async fn invited_guest_sees_only_its_board_in_welcome_and_state() {
+        let (host, url) = boot().await;
+        host.push_local(sample_two_boards(), 1).await.unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "alice").await;
+        let welcome = next_type(&mut guest, "welcome").await;
+        assert_eq!(welcome["snapshot"]["workspace"]["boards"].as_array().unwrap().len(), 1);
+        assert_eq!(welcome["snapshot"]["workspace"]["boards"][0]["id"], "b1");
+        assert!(!welcome.to_string().contains("Секретная доска"));
+
+        let mut changed = sample_two_boards();
+        changed.boards[1].name = "Ещё один секрет".into();
+        host.push_local(changed, 2).await.unwrap();
+        let state = next_type(&mut guest, "state").await;
+        assert_eq!(state["workspace"]["boards"].as_array().unwrap().len(), 1);
+        assert_eq!(state["workspace"]["boards"][0]["id"], "b1");
+        assert!(!state.to_string().contains("Ещё один секрет"));
+        host.stop().await;
+    }
+
+    #[tokio::test]
+    async fn guest_cannot_push_other_boards_or_remove_host_boards() {
+        let (host, url) = boot().await;
+        host.push_local(sample_two_boards(), 1).await.unwrap();
+        let db_path = host.session.inner.lock().await.db_path.clone();
+        let before = storage::load(&db_path).unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "malicious").await;
+        next_type(&mut guest, "welcome").await;
+
+        for mut forged in [sample_two_boards(), sample_two_boards()] {
+            // Try to send the entire host workspace and then only the *other* board.
+            if forged.boards.len() == 2 {
+                if forged.boards[1].name == "Секретная доска" {
+                    forged.boards[1].name = "Украдено".into();
+                }
+            }
+            let message = serde_json::json!({
+                "type": "push",
+                "expectedRevision": before.revision,
+                "workspace": forged
+            });
+            guest.send(TMessage::Text(message.to_string().into())).await.unwrap();
+            let rejected = next_type(&mut guest, "rejected").await;
+            assert_eq!(rejected["snapshot"]["workspace"]["boards"].as_array().unwrap().len(), 1);
+            assert_eq!(storage::load(&db_path).unwrap().workspace, before.workspace);
+        }
+        let mut only_other = sample_two_boards();
+        only_other.boards.remove(0);
+        only_other.selected_board_id = Some("b2".into());
+        let forged = serde_json::json!({
+            "type": "push",
+            "expectedRevision": before.revision,
+            "workspace": only_other,
+        });
+        guest.send(TMessage::Text(forged.to_string().into())).await.unwrap();
+        next_type(&mut guest, "rejected").await;
+        assert_eq!(storage::load(&db_path).unwrap().workspace, before.workspace);
+        host.stop().await;
+    }
+
+    #[tokio::test]
+    async fn view_only_invite_rejects_all_guest_writes() {
+        let (host, url) = boot().await;
+        host.issue_invite("b1", "view").await.unwrap();
+        let db_path = host.session.inner.lock().await.db_path.clone();
+        let before = storage::load(&db_path).unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "viewer").await;
+        next_type(&mut guest, "welcome").await;
+        let push = serde_json::json!({
+            "type": "push", "expectedRevision": before.revision, "workspace": sample()
+        });
+        guest.send(TMessage::Text(push.to_string().into())).await.unwrap();
+        let rejected = next_type(&mut guest, "rejected").await;
+        assert!(rejected["message"].as_str().unwrap().contains("просмотр"));
+        assert_eq!(storage::load(&db_path).unwrap().workspace, before.workspace);
+        host.stop().await;
+    }
+
+    #[tokio::test]
+    async fn edit_invite_can_change_card_without_touching_other_board() {
+        let (host, url) = boot().await;
+        host.push_local(sample_two_boards(), 1).await.unwrap();
+        let db_path = host.session.inner.lock().await.db_path.clone();
+        let before = storage::load(&db_path).unwrap();
+        let token = host.session.inner.lock().await.current_invite.clone().unwrap();
+        let mut guest = connect(&url, &token, "editor").await;
+        let welcome = next_type(&mut guest, "welcome").await;
+        let mut workspace: Workspace = serde_json::from_value(welcome["snapshot"]["workspace"].clone()).unwrap();
+        let task = serde_json::json!({
+            "id": "t1",
+            "title": "Изменённая карточка",
+            "description": "",
+            "label": "",
+            "color": "sage",
+            "priority": "medium"
+        });
+        workspace.boards[0].columns[0].tasks.push(serde_json::from_value(task).unwrap());
+        let push = serde_json::json!({
+            "type": "push", "expectedRevision": before.revision, "workspace": workspace
+        });
+        guest.send(TMessage::Text(push.to_string().into())).await.unwrap();
+        let state = next_type(&mut guest, "state").await;
+        assert_eq!(state["workspace"]["boards"].as_array().unwrap().len(), 1);
+        let after = storage::load(&db_path).unwrap();
+        assert_eq!(after.workspace.boards[0].columns[0].tasks[0].title, "Изменённая карточка");
+        assert_eq!(
+            serde_json::to_vec(&after.workspace.boards[1]).unwrap(),
+            serde_json::to_vec(&before.workspace.boards[1]).unwrap()
+        );
+        host.stop().await;
+    }
+
 }
