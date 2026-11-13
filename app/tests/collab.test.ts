@@ -19,7 +19,7 @@ const invite: InvitePayload = {
   format: "sreda-invite",
   version: 1,
   workspaceId: "ws_alpha",
-  hostId: "host_lucas",
+  hostId: "host_demo",
   url: "https://sreda.ngrok.app",
   staticDomain: true,
   token: "a".repeat(43),
@@ -63,7 +63,7 @@ test("reducer goes online on welcome and replaces state on host pushes", () => {
       boards: [nextBoard],
       selectedBoardId: nextBoard.id,
     },
-    originId: "host_lucas",
+    originId: "host_demo",
   });
   assert.equal(state.snapshot?.revision, 4);
   assert.equal(state.snapshot?.workspace.boards[0].name, "Обновлено");
@@ -214,7 +214,7 @@ test("join form requires a valid invite and a guest name", () => {
     format: "sreda-invite",
     version: 1,
     workspaceId: "ws_alpha",
-    hostId: "host_lucas",
+    hostId: "host_demo",
     url: "https://sreda.ngrok.app",
     staticDomain: true,
     token: "a".repeat(43),

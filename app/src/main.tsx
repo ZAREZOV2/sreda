@@ -1016,11 +1016,11 @@ function App() {
           inviteLink: "",
           staticDomain: true,
           workspaceId: "ws_demo",
-          hostId: "host_lucas",
+          hostId: "host_demo",
           participants: [
             {
-              id: "host_lucas",
-              name: "Лукас",
+              id: "host_demo",
+              name: "Алексей",
               selectedBoardId: null,
               role: "host",
               color: "sage",

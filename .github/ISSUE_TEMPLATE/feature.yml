@@ -1,0 +1,29 @@
+name: Предложение
+description: Новая возможность или улучшение того, что уже есть
+title: "Предложение: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Крупные идеи, которые ещё не в релизе, собраны в [app/ROADMAP.md](https://github.com/ZAREZOV2/sreda/blob/main/app/ROADMAP.md). Посмотрите, нет ли там вашего предложения.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какая задача
+      description: Кому это нужно и что сейчас приходится делать руками.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Как это могло бы работать
+      description: Поведение в интерфейсе, без обязательного плана реализации.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Что ещё рассматривали
+    validations:
+      required: false

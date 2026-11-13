@@ -1,16 +1,37 @@
+# Зависимости и сборка
+node_modules/
+dist/
 app/node_modules/
 app/dist/
 app/src-tauri/target/
 app/src-tauri/gen/
+app/src-tauri/binaries/
+app/src-tauri/WixTools/
 work/
 outputs/
 *.log
+
+# Секреты и локальные настройки
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+
+# Данные приложения
 *.sqlite
 *.sqlite3
 *.sqlite-wal
 *.sqlite-shm
 *.sqlite3-wal
 *.sqlite3-shm
+*.db
+
+# Система и редакторы
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~

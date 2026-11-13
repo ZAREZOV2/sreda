@@ -3,6 +3,15 @@
   "version": "0.3.0",
   "license": "GPL-3.0-or-later",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZAREZOV2/sreda.git",
+    "directory": "app"
+  },
+  "bugs": {
+    "url": "https://github.com/ZAREZOV2/sreda/issues"
+  },
+  "homepage": "https://github.com/ZAREZOV2/sreda#readme",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

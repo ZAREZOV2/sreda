@@ -22,15 +22,15 @@ import {
 test("display name is required and trimmed", () => {
   assert.equal(validateDisplayName(""), "Укажите, как вас представлять.");
   assert.equal(validateDisplayName("   "), "Укажите, как вас представлять.");
-  assert.equal(validateDisplayName("Лукас"), undefined);
+  assert.equal(validateDisplayName("Алексей"), undefined);
   assert.equal(validateDisplayName("  Анна  "), undefined);
   assert.match(validateDisplayName("а".repeat(41)) ?? "", /40/);
   assert.match(validateDisplayName("A\u0000B") ?? "", /недопустимые/);
 });
 
 test("default profile uses the OS name when it is usable, otherwise Вы", () => {
-  assert.deepEqual(defaultProfile("bagrov"), {
-    displayName: "bagrov",
+  assert.deepEqual(defaultProfile("alex"), {
+    displayName: "alex",
     color: "sage",
   });
   assert.deepEqual(defaultProfile("  "), {
@@ -41,7 +41,7 @@ test("default profile uses the OS name when it is usable, otherwise Вы", () =>
     displayName: "Вы",
     color: "sage",
   });
-  assert.equal(normalizeDisplayName("  Лукас  "), "Лукас");
+  assert.equal(normalizeDisplayName("  Алексей  "), "Алексей");
   assert.equal(normalizeDisplayName("x".repeat(80)).length, 40);
 });
 
@@ -63,29 +63,29 @@ test("normalizeProfile rejects an unknown colour and empty name", () => {
 test("ui prefs parse and merge keep the profile when only the theme changes", () => {
   const stored = parseUiPrefs({
     themeId: "paper",
-    profile: { displayName: "Лукас", color: "blue" },
+    profile: { displayName: "Алексей", color: "blue" },
   });
   assert.deepEqual(stored, {
     themeId: "paper",
-    profile: { displayName: "Лукас", color: "blue" },
+    profile: { displayName: "Алексей", color: "blue" },
   });
   const merged = mergeUiPrefs(stored, { themeId: "terminal" });
   assert.deepEqual(merged, {
     themeId: "terminal",
-    profile: { displayName: "Лукас", color: "blue" },
+    profile: { displayName: "Алексей", color: "blue" },
   });
   const renamed = mergeUiPrefs(merged, {
     profile: { displayName: "Анна", color: "violet" },
   });
   assert.equal(renamed.themeId, "terminal");
   assert.deepEqual(renamed.profile, { displayName: "Анна", color: "violet" });
-  const empty = parseUiPrefs(undefined, { fallbackName: "bagrov" });
+  const empty = parseUiPrefs(undefined, { fallbackName: "alex" });
   assert.equal(empty.themeId, "graphite");
-  assert.equal(empty.profile.displayName, "bagrov");
+  assert.equal(empty.profile.displayName, "alex");
 });
 
 test("initials take the first letters of one or two words", () => {
-  assert.equal(initials("Лукас"), "Л");
+  assert.equal(initials("Алексей"), "А");
   assert.equal(initials("Иван Петров"), "ИП");
   assert.equal(initials("  анна-мария  "), "АМ");
   assert.equal(initials(""), "В");
