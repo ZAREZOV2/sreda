@@ -57,15 +57,44 @@ jobs:
           cargo build --release --bin sreda-mcp --manifest-path app/src-tauri/Cargo.toml
           New-Item -ItemType Directory -Force -Path app/src-tauri/binaries | Out-Null
           Copy-Item app/src-tauri/target/release/sreda-mcp.exe app/src-tauri/binaries/sreda-mcp-x86_64-pc-windows-msvc.exe
+      - name: Подписать MCP для дистрибутива (если есть сертификат)
+        shell: pwsh
+        env:
+          SREDA_SIGN_CERT_PFX: ${{ secrets.SREDA_SIGN_CERT_PFX }}
+          SREDA_SIGN_CERT_PASSWORD: ${{ secrets.SREDA_SIGN_CERT_PASSWORD }}
+        run: ./scripts/sign-windows.ps1 -Files @("app/src-tauri/target/release/sreda-mcp.exe", "app/src-tauri/binaries/sreda-mcp-x86_64-pc-windows-msvc.exe")
       - name: Подключить sidecar к установщику
         run: node -e "const fs=require('fs'); const p='app/src-tauri/tauri.conf.json'; const cfg=JSON.parse(fs.readFileSync(p,'utf8')); cfg.bundle.externalBin=['binaries/sreda-mcp']; fs.writeFileSync(p, JSON.stringify(cfg,null,2));"
       - name: Установщик NSIS
         working-directory: app
         run: npm run installer
+      - name: Подписать установщик (если есть сертификат)
+        shell: pwsh
+        env:
+          SREDA_SIGN_CERT_PFX: ${{ secrets.SREDA_SIGN_CERT_PFX }}
+          SREDA_SIGN_CERT_PASSWORD: ${{ secrets.SREDA_SIGN_CERT_PASSWORD }}
+        run: |
+          $installers = @(Get-ChildItem "app/src-tauri/target/release/bundle/nsis" -Filter "*.exe" -File | ForEach-Object FullName)
+          if ($installers.Count -eq 0) { throw "Установщик не найден" }
+          ./scripts/sign-windows.ps1 -Files $installers
+      - name: Контрольные суммы SHA256
+        shell: pwsh
+        run: |
+          $artifacts = @(
+            Get-ChildItem "app/src-tauri/target/release/bundle/nsis" -Filter "*.exe" -File
+            Get-Item "app/src-tauri/target/release/sreda-mcp.exe"
+          )
+          $lines = @($artifacts | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash *$($_.Name)"
+          })
+          if ($lines.Count -lt 2) { throw "Недостаточно артефактов для SHA256SUMS" }
+          $lines | Set-Content "SHA256SUMS.txt" -Encoding ascii
       - name: Релиз
         uses: softprops/action-gh-release@v2
         with:
           files: |
             app/src-tauri/target/release/bundle/nsis/*.exe
             app/src-tauri/target/release/sreda-mcp.exe
+            SHA256SUMS.txt
           generate_release_notes: true
