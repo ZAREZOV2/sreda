@@ -42,6 +42,8 @@ pub enum ClientMessage {
         color: Option<String>,
     },
     Heartbeat,
+    #[serde(rename_all = "camelCase")]
+    ShareTheme { theme: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,6 +82,11 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     Error {
         message: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    Theme {
+        theme: String,
+        origin_id: String,
     },
 }
 

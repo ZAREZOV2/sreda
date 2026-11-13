@@ -7,6 +7,12 @@ import {
   workspaceBackup,
 } from "./model";
 import type { BoardFile, Snapshot, Workspace, WorkspaceBackup } from "./model";
+function isWorkspaceBackup(
+  value: Workspace | WorkspaceBackup,
+): value is WorkspaceBackup {
+  return "format" in value && value.format === "sreda-backup";
+}
+
 export const desktop = isTauri();
 // The HTML preview is deliberately ephemeral; only the desktop build persists to SQLite.
 let preview: Snapshot = { revision: 0, workspace: emptyWorkspace() };
@@ -98,9 +104,11 @@ export async function openExternalUrl(url: string): Promise<boolean> {
 }
 
 export async function exportWorkspaceBackup(
-  workspace: Workspace,
+  workspace: Workspace | WorkspaceBackup,
 ): Promise<boolean> {
-  const file = workspaceBackup(workspace);
+  const file = isWorkspaceBackup(workspace)
+    ? workspace
+    : workspaceBackup(workspace);
   if (desktop) return invoke<boolean>("export_workspace_backup", { file });
   const blob = new Blob([JSON.stringify(file, null, 2)], {
     type: "application/json",

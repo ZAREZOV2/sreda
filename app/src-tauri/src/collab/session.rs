@@ -157,6 +157,11 @@ pub enum HostEvent {
     Presence {
         participants: Vec<Participant>,
     },
+    #[serde(rename_all = "camelCase")]
+    Theme {
+        theme: String,
+        origin_id: String,
+    },
     Stopped,
 }
 

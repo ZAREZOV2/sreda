@@ -54,6 +54,7 @@ import {
   importCopy,
   newBoard,
   uid,
+  workspaceBackup,
 } from "./model";
 import type { Board, DeletedTask, Priority, Snapshot, Task } from "./model";
 import {
@@ -84,12 +85,21 @@ import {
 import { BrandMark } from "./BrandMark";
 import { ThemePicker } from "./ThemePicker";
 import { SettingsDialog, type SettingsSection } from "./Settings";
+import { CommandPalette } from "./CommandPalette";
+import { FocusTimer } from "./FocusTimer";
+import { MarkdownView } from "./markdown/MarkdownView";
+import { backupBundle, importDocumentCopies } from "./documentStore";
+import { isRecurrence, recurrenceLabels, type Recurrence } from "./recurrence";
+import { dueReminders, reminderKey } from "./reminders";
+import { notify } from "./FocusTimer";
 import {
   defaultProfile,
   initials,
   type Profile,
 } from "./profile";
 import {
+  parseThemeText,
+  saveUserTheme,
   BUILTIN_THEMES,
   DEFAULT_THEME_ID,
   applyTheme,
@@ -375,15 +385,73 @@ function TaskEditor({
               />
             </label>
             <label className="field">
-              <span>Описание</span>
+              <span>Описание · Markdown</span>
               <textarea
                 rows={7}
                 maxLength={20000}
-                placeholder="Контекст, детали, критерии готовности…"
+                placeholder="Контекст, списки, **акценты**, ссылки…"
                 value={draft.task.description}
                 onChange={(e) => change({ description: e.target.value })}
               />
             </label>
+            {draft.task.description.trim() && (
+              <div className="card-markdown">
+                <MarkdownView markdown={draft.task.description} />
+              </div>
+            )}
+            <FocusTimer
+              taskId={draft.task.id}
+              title={draft.task.title || "Задача"}
+              onComplete={(ms) =>
+                change({ timeSpentMs: (draft.task.timeSpentMs ?? 0) + ms })
+              }
+            />
+            <div className="editor-properties">
+              <label className="field">
+                <span>Повтор</span>
+                <select
+                  value={draft.task.recurrence?.freq ?? ""}
+                  onChange={(event) => {
+                    const freq = event.target.value as Recurrence["freq"] | "";
+                    change({
+                      recurrence: freq
+                        ? { freq, interval: draft.task.recurrence?.interval ?? 1 }
+                        : undefined,
+                    });
+                  }}
+                >
+                  <option value="">Не повторяется</option>
+                  {Object.entries(recurrenceLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Напоминание</span>
+                <input
+                  type="datetime-local"
+                  value={
+                    draft.task.reminderAt
+                      ? new Date(draft.task.reminderAt).toISOString().slice(0, 16)
+                      : ""
+                  }
+                  onChange={(event) =>
+                    change({
+                      reminderAt: event.target.value
+                        ? new Date(event.target.value).getTime()
+                        : null,
+                    })
+                  }
+                />
+              </label>
+            </div>
+            {(draft.task.timeSpentMs ?? 0) > 0 && (
+              <p className="field-hint">
+                Учтено {Math.round((draft.task.timeSpentMs ?? 0) / 60000)} мин
+              </p>
+            )}
             <div className="editor-properties">
               <label className="field">
                 <span>Колонка</span>
@@ -601,6 +669,10 @@ function App() {
   const [themeOpen, setThemeOpen] = useState(false);
   const [activeThemeKey, setActiveThemeKey] = useState(DEFAULT_THEME_ID);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [offeredTheme, setOfferedTheme] = useState("");
+  const docEpoch = useRef(-1);
+  const firedReminders = useRef(new Set<string>());
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("profile");
   const [profile, setProfile] = useState<Profile>(defaultProfile());
@@ -733,6 +805,7 @@ function App() {
   }, []);
   const handleCollabEvent = useCallback(
     (event: CollabEvent) => {
+      if (event.type === "theme") setOfferedTheme(event.theme);
       const next = reduceCollab(collabRef.current, event);
       collabRef.current = next;
       setCollab(next);
@@ -843,6 +916,7 @@ function App() {
           setHostStatus((status) => ({ ...status, participants }));
           setCollab((state) => ({ ...state, participants }));
         },
+        onTheme: (theme) => setOfferedTheme(theme),
         onStopped: () => {
           hostingRef.current = false;
           setHostStatus((status) => ({
@@ -1031,10 +1105,62 @@ function App() {
         setSettingsSection("profile");
         setSettingsOpen(true);
       }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useEffect(() => {
+    if (!storage.desktop) return;
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const revision = await invoke<number>("workspace_revision");
+          if (revision !== live.current.revision && !guard.current?.dirty) await load();
+          const epoch = await invoke<number>("documents_epoch");
+          if (epoch !== docEpoch.current) {
+            docEpoch.current = epoch;
+            window.dispatchEvent(new Event("sreda-docs-changed"));
+          }
+        } catch {
+          /* локальная база ещё не открыта */
+        }
+      })();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [load]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const tasks = live.current.workspace.boards.flatMap((board) =>
+        board.columns.flatMap((column) => column.tasks),
+      );
+      const due = dueReminders(tasks, Date.now(), firedReminders.current);
+      for (const task of due) {
+        firedReminders.current.add(reminderKey(task));
+        void notify("Напоминание", task.title);
+        setToast("Напоминание: " + task.title);
+      }
+    }, 20000);
+    return () => clearInterval(timer);
+  }, []);
+  const acceptTheme = async () => {
+    const parsed = parseThemeText(offeredTheme);
+    if (!parsed.ok) {
+      setError(parsed.errors.map((item) => item.message).join("; "));
+      setOfferedTheme("");
+      return;
+    }
+    const filename = await saveUserTheme(parsed.theme);
+    applyTheme(parsed.theme);
+    setActiveThemeKey("user:" + filename);
+    setOfferedTheme("");
+    setCollab((state) => reduceCollab(state, { type: "clear_theme" }));
+    setToast("Тема «" + parsed.theme.name + "» применена");
+  };
   const openSharePanel = async () => {
     setShareError("");
     try {
@@ -1381,8 +1507,28 @@ function App() {
     setFileBusy(true);
     try {
       await commands.current!.idle();
-      if (await storage.exportWorkspaceBackup(live.current.workspace))
-        setToast("Резервная копия сохранена");
+      const bundle = await backupBundle();
+      if (
+        await storage.exportWorkspaceBackup(
+          workspaceBackup(live.current.workspace, {
+            documents: bundle.documents.map((doc) => ({
+              id: doc.id,
+              title: doc.title,
+              markdown: doc.markdown,
+              revision: doc.revision,
+              folderId: doc.folderId,
+              linkedCardId: doc.linkedCardId,
+            })),
+            folders: bundle.folders.map((folder) => ({
+              id: folder.id,
+              name: folder.name,
+              revision: folder.revision,
+              parentId: folder.parentId,
+            })),
+          }),
+        )
+      )
+        setToast("Резервная копия с документами сохранена");
     } catch (e) {
       setError(String(e));
     } finally {
@@ -1405,7 +1551,11 @@ function App() {
       for (const board of boards) {
         if (await commit({ type: "board.add", board })) added += 1;
       }
-      if (added)
+      const importedDocs = await importDocumentCopies(
+        packed.file.documents ?? [],
+        packed.file.folders ?? [],
+      );
+      if (added || importedDocs)
         setToast(
           added === 1
             ? "Импортирована 1 доска как копия"
@@ -1508,7 +1658,55 @@ function App() {
     reload: "Перечитать данные с диска?",
   };
   return (
-    <div className="app-shell" data-sidebar-open={sidebarOpen}>
+    <div
+      className="app-shell"
+      data-sidebar-open={sidebarOpen}
+      onDragOver={(event) => {
+        if ([...event.dataTransfer.types].includes("Files")) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        const file = [...event.dataTransfer.files].find((item) => item.name.endsWith(".sreda-theme.json"));
+        if (!file) return;
+        event.preventDefault();
+        void file.text().then(async (text) => {
+          const parsed = parseThemeText(text);
+          if (!parsed.ok) {
+            setError(parsed.errors.map((item) => item.message).join("; "));
+            return;
+          }
+          const filename = await saveUserTheme(parsed.theme);
+          applyTheme(parsed.theme);
+          setActiveThemeKey("user:" + filename);
+          setToast("Тема «" + parsed.theme.name + "» применена");
+        });
+      }}
+    >
+      {offeredTheme && (
+        <div className="theme-offer" role="status">
+          <span>Участник прислал тему. Применить её на этом устройстве?</span>
+          <Button type="button" onClick={() => void acceptTheme()}>
+            Применить
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setOfferedTheme("")}>
+            Не сейчас
+          </Button>
+        </div>
+      )}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        boards={workspace.boards}
+        onOpenDoc={() => void showDocuments(true)}
+        actions={[
+          { id: "boards", label: "Открыть доски", run: () => void showDocuments(false) },
+          { id: "docs", label: "Открыть документы", run: () => void showDocuments(true) },
+          { id: "settings", label: "Настройки", run: () => openSettings("profile") },
+          { id: "mcp", label: "ИИ и MCP", run: () => openSettings("ai") },
+          { id: "updates", label: "Обновления", run: () => openSettings("updates") },
+          { id: "theme", label: "Сменить тему", run: () => setThemeOpen(true) },
+        ]}
+      />
+      <FocusTimer />
       <aside id="board-sidebar" className="sidebar" hidden={!sidebarOpen}>
         <div className="brand">
           <div className="brand-symbol">
@@ -1769,6 +1967,15 @@ function App() {
           onOpenNgrokDashboard={async () => {
             await storage.openExternalUrl("https://dashboard.ngrok.com");
           }}
+          onShareTheme={async () => {
+            const record =
+              [...BUILTIN_THEMES].find((item) => themeRecordKey(item) === activeThemeKey) ??
+              (await loadUserThemes()).find((item) => themeRecordKey(item) === activeThemeKey);
+            if (!record) return;
+            const payload = JSON.stringify(record.theme);
+            if (storage.desktop) await collabApi.shareTheme(payload);
+            else setToast("Передача темы работает в окне совместной работы");
+          }}
           busy={fileBusy}
         />
         <SharePanel
@@ -1835,7 +2042,65 @@ function App() {
             </Button>
           </div>
         )}
-        {documentsOpen ? <Documents onGuard={onDocumentGuard} /> : loading ? (
+        {documentsOpen ? (
+          <Documents
+            onGuard={onDocumentGuard}
+            boards={workspace.boards}
+            onCreateCards={async (titles) => {
+              const target =
+                workspace.boards.find((item) => item.id === workspace.selectedBoardId) ??
+                workspace.boards[0];
+              if (!target) return [];
+              const column = target.columns.find((item) => item.kind === "todo") ?? target.columns[0];
+              const ids: string[] = [];
+              for (const title of titles) {
+                const id = uid();
+                ids.push(id);
+                await commit({
+                  type: "task.add",
+                  boardId: target.id,
+                  columnId: column.id,
+                  task: {
+                    id,
+                    title,
+                    description: "",
+                    label: "",
+                    color: "gray",
+                    priority: "medium",
+                  },
+                });
+              }
+              return ids;
+            }}
+            onToggleCard={async (cardId, checked) => {
+              for (const item of workspace.boards) {
+                const found = findTask(item, cardId);
+                if (!found) continue;
+                const column = item.columns.find((entry) => entry.kind === (checked ? "done" : "todo"));
+                if (!column || column.id === found.column.id) return;
+                await commit({
+                  type: "task.move",
+                  boardId: item.id,
+                  id: cardId,
+                  columnId: column.id,
+                });
+              }
+            }}
+            onOpenCard={(cardId) => {
+              for (const item of workspace.boards) {
+                const found = findTask(item, cardId);
+                if (!found) continue;
+                void showDocuments(false);
+                setEditor({
+                  boardId: item.id,
+                  columnId: found.column.id,
+                  task: found.task,
+                  isNew: false,
+                });
+              }
+            }}
+          />
+        ) : loading ? (
           <div className="empty-screen">
             <LoaderCircle size={24} className="spin" />
             <h1>Открываем рабочее пространство</h1>
@@ -2213,9 +2478,14 @@ function App() {
                           </div>
                           <h3>{task.title}</h3>
                           {task.description && (
-                            <p className="task-description">
-                              {task.description}
-                            </p>
+                            <div className="task-description card-markdown">
+                              <MarkdownView markdown={task.description} />
+                            </div>
+                          )}
+                          {typeof task.timeSpentMs === "number" && task.timeSpentMs > 0 && (
+                            <small className="card-time">
+                              {Math.round(task.timeSpentMs / 60000)} мин
+                            </small>
                           )}
                           <div className="card-footer">
                             <div className="card-details">

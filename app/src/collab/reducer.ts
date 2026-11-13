@@ -29,6 +29,7 @@ export type CollabState = {
   error: string;
   hostClosed: boolean;
   reconnectAttempt: number;
+  offeredTheme: string;
 };
 
 export const initialCollabState = (): CollabState => ({
@@ -44,6 +45,7 @@ export const initialCollabState = (): CollabState => ({
   error: "",
   hostClosed: false,
   reconnectAttempt: 0,
+  offeredTheme: "",
 });
 
 export type CollabEvent =
@@ -70,7 +72,9 @@ export type CollabEvent =
   | { type: "hosting"; snapshot: Snapshot; workspaceId: string; hostId: string; staticDomain: boolean }
   | { type: "stopped" }
   | { type: "clear_closed" }
-  | { type: "reconnect_tick" };
+  | { type: "reconnect_tick" }
+  | { type: "theme"; theme: string }
+  | { type: "clear_theme" };
 
 export function reduceCollab(state: CollabState, event: CollabEvent): CollabState {
   switch (event.type) {
@@ -149,6 +153,10 @@ export function reduceCollab(state: CollabState, event: CollabEvent): CollabStat
       return { ...state, hostClosed: false, status: "disconnected" };
     case "reconnect_tick":
       return { ...state, reconnectAttempt: state.reconnectAttempt + 1 };
+    case "theme":
+      return { ...state, offeredTheme: event.theme };
+    case "clear_theme":
+      return { ...state, offeredTheme: "" };
     default:
       return state;
   }

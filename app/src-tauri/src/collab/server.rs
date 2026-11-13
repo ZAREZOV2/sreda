@@ -123,6 +123,22 @@ impl HostHandle {
         self.session.set_host_profile(name, color).await;
     }
 
+    pub async fn share_theme(&self, theme: String) {
+        let origin = {
+            let inner = self.session.inner.lock().await;
+            inner.identity.host_id.clone()
+        };
+        self.session
+            .broadcast(
+                ServerMessage::Theme {
+                    theme,
+                    origin_id: origin,
+                },
+                None,
+            )
+            .await;
+    }
+
     pub async fn stop(self) {
         let _ = self.shutdown.send(true);
         self.session
@@ -422,7 +438,35 @@ async fn handle_client(session: &Session, guest_id: &str, bytes: &[u8]) -> Resul
                 }
             }
         }
+        ClientMessage::ShareTheme { theme } => {
+            if theme.len() > 100_000 || theme_forbidden(&theme) {
+                return Err("Тема не прошла проверку".into());
+            }
+            let _ = session.events.send(HostEvent::Theme {
+                theme: theme.clone(),
+                origin_id: guest_id.to_string(),
+            });
+            session
+                .broadcast(
+                    ServerMessage::Theme {
+                        theme,
+                        origin_id: guest_id.to_string(),
+                    },
+                    Some(guest_id),
+                )
+                .await;
+            Ok(())
+        }
     }
+}
+
+fn theme_forbidden(theme: &str) -> bool {
+    let lowered = theme.to_ascii_lowercase();
+    lowered.contains("@import")
+        || lowered.contains("javascript:")
+        || lowered.contains("expression(")
+        || lowered.contains("url(")
+        || lowered.contains("<script")
 }
 
 async fn send(

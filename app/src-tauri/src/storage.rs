@@ -1,3 +1,4 @@
+use crate::recurrence::Recurrence;
 use rusqlite::{params, Connection, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, io::Write, path::Path};
@@ -10,6 +11,17 @@ pub struct Task {
     pub label: String,
     pub color: String,
     pub priority: String,
+    #[serde(default, skip_serializing_if = "is_zero_i64")]
+    pub time_spent_ms: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recurrence: Option<Recurrence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reminder_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub linked_doc_id: Option<String>,
+}
+fn is_zero_i64(value: &i64) -> bool {
+    *value == 0
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -137,6 +149,23 @@ fn validate_board(
             {
                 return Err("Некорректная метка или приоритет".into());
             }
+            if task.time_spent_ms < 0 || task.time_spent_ms > 10 * 365 * 24 * 60 * 60 * 1000 {
+                return Err("Некорректный учёт времени".into());
+            }
+            if let Some(recurrence) = &task.recurrence {
+                if !crate::recurrence::valid(recurrence) {
+                    return Err("Некорректное повторение задачи".into());
+                }
+            }
+            if let Some(doc_id) = &task.linked_doc_id {
+                text(doc_id, 100, true)?;
+                if !doc_id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+                {
+                    return Err("Некорректная связь с документом".into());
+                }
+            }
         }
     }
     Ok(())
@@ -176,14 +205,28 @@ pub struct BackupFile {
     pub format: String,
     pub version: u32,
     pub workspace: Workspace,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub documents: Vec<crate::documents::BackupDocument>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folders: Vec<crate::documents::BackupFolder>,
 }
 
 pub fn validate_backup(file: &mut BackupFile) -> Result<(), String> {
-    if file.format != "sreda-backup" || file.version != 1 {
-        return Err("Это не файл резервной копии Среда версии 1".into());
+    if file.format != "sreda-backup" || (file.version != 1 && file.version != 2) {
+        return Err("Это не файл резервной копии Среда версии 1 или 2".into());
     }
     normalize_workspace(&mut file.workspace);
-    validate(&file.workspace)
+    validate(&file.workspace)?;
+    if file.documents.len() > 5000 || file.folders.len() > 1000 {
+        return Err("В копии слишком много документов".into());
+    }
+    for document in &file.documents {
+        crate::documents::validate_backup_document(document)?;
+    }
+    for folder in &file.folders {
+        crate::documents::validate_backup_folder(folder)?;
+    }
+    Ok(())
 }
 
 pub fn read_backup_or_board(path: &Path) -> Result<serde_json::Value, String> {
@@ -212,9 +255,9 @@ pub fn read_backup_or_board(path: &Path) -> Result<serde_json::Value, String> {
         validate_file(&mut parsed)?;
         return serde_json::to_value(&parsed).map_err(|e| e.to_string());
     }
-    Err("Ожидался файл доски или резервной копии Среда версии 1".into())
+    Err("Ожидался файл доски или резервной копии Среда версии 1 или 2".into())
 }
-fn open(path: &Path) -> Result<Connection, String> {
+pub(crate) fn open(path: &Path) -> Result<Connection, String> {
     let conn = Connection::open(path).map_err(|e| format!("Не удалось открыть SQLite: {e}"))?;
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
@@ -258,6 +301,10 @@ pub fn save(path: &Path, workspace: &Workspace, expected_revision: i64) -> Resul
     if json.len() > 20 * 1024 * 1024 {
         return Err("Данные превышают 20 МБ".into());
     }
+    {
+        let conn = open(path)?;
+        crate::search::ensure(&conn).map_err(|e| format!("Не удалось подготовить поиск: {e}"))?;
+    }
     let mut conn = open(path)?;
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -278,9 +325,29 @@ pub fn save(path: &Path, workspace: &Workspace, expected_revision: i64) -> Resul
         params![next, json],
     )
     .map_err(|e| format!("Не удалось записать данные: {e}"))?;
+    crate::search::reindex_cards(&tx, &workspace)
+        .map_err(|e| format!("Не удалось обновить поиск карточек: {e}"))?;
     tx.commit()
         .map_err(|e| format!("SQLite не подтвердила сохранение: {e}"))?;
     Ok(next)
+}
+
+/// Повторно читает снимок и записывает его, если ревизию успели сдвинуть.
+pub fn update<F>(path: &Path, mut mutate: F) -> Result<i64, String>
+where
+    F: FnMut(&mut Workspace) -> Result<(), String>,
+{
+    for _ in 0..5 {
+        let snapshot = load(path)?;
+        let mut workspace = snapshot.workspace;
+        mutate(&mut workspace)?;
+        match save(path, &workspace, snapshot.revision) {
+            Ok(revision) => return Ok(revision),
+            Err(error) if error.contains("другом окне") => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err("Не удалось записать: данные изменились несколько раз подряд".into())
 }
 pub fn read_import(path: &Path) -> Result<BoardFile, String> {
     let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
@@ -553,6 +620,8 @@ mod tests {
             format: "sreda-backup".into(),
             version: 1,
             workspace: workspace(),
+            documents: vec![],
+            folders: vec![],
         };
         write_export(&path, &serde_json::to_vec(&file).unwrap()).unwrap();
         let loaded = read_backup_or_board(&path).unwrap();
@@ -568,9 +637,29 @@ mod tests {
         let as_board = read_backup_or_board(&board_path).unwrap();
         assert_eq!(as_board["format"], "sreda-board");
         let mut bad = file;
-        bad.version = 2;
+        bad.version = 3;
         std::fs::write(&path, serde_json::to_vec(&bad).unwrap()).unwrap();
         assert!(read_backup_or_board(&path).is_err());
+        let mut with_docs = BackupFile {
+            format: "sreda-backup".into(),
+            version: 2,
+            workspace: workspace(),
+            documents: vec![crate::documents::BackupDocument {
+                id: "doc-1".into(),
+                title: "Заметка".into(),
+                markdown: "# Текст".into(),
+                revision: 1,
+                folder_id: None,
+                linked_card_id: None,
+            }],
+            folders: vec![],
+        };
+        validate_backup(&mut with_docs).unwrap();
+        let v2 = dir.join("v2.json");
+        write_export(&v2, &serde_json::to_vec(&with_docs).unwrap()).unwrap();
+        let loaded = read_backup_or_board(&v2).unwrap();
+        assert_eq!(loaded["version"], 2);
+        assert_eq!(loaded["documents"][0]["title"], "Заметка");
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

@@ -1,3 +1,6 @@
+import { isRecurrence, nextOccurrence, type Recurrence } from "./recurrence.ts";
+
+export type { Recurrence };
 export type Priority = "high" | "medium" | "low";
 export type Color = "sage" | "blue" | "amber" | "rose" | "violet" | "gray";
 export type Task = {
@@ -7,6 +10,10 @@ export type Task = {
   label: string;
   color: Color;
   priority: Priority;
+  timeSpentMs?: number;
+  recurrence?: Recurrence;
+  reminderAt?: number | null;
+  linkedDocId?: string | null;
 };
 export type ColumnKind = "todo" | "progress" | "done";
 export type Column = {
@@ -46,10 +53,26 @@ export type Workspace = {
 };
 export type Snapshot = { revision: number; workspace: Workspace };
 export type BoardFile = { format: "sreda-board"; version: 1; board: Board };
+export type BackupDocument = {
+  id: string;
+  title: string;
+  markdown: string;
+  revision: number;
+  folderId?: string | null;
+  linkedCardId?: string | null;
+};
+export type BackupFolder = {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  revision: number;
+};
 export type WorkspaceBackup = {
   format: "sreda-backup";
-  version: 1;
+  version: 1 | 2;
   workspace: Workspace;
+  documents?: BackupDocument[];
+  folders?: BackupFolder[];
 };
 export type DeletedTask = {
   boardId: string;
@@ -208,20 +231,25 @@ export function applyAction(previous: Workspace, action: Action): Workspace {
         break;
       case "task.update": {
         const found = required(findTask(board, action.task.id));
+        const fromKind = found.column.kind;
         const target = required(
           board.columns.find((c) => c.id === action.columnId),
         );
+        const task = structuredClone(action.task);
         if (target.id === found.column.id)
-          found.column.tasks[found.index] = structuredClone(action.task);
+          found.column.tasks[found.index] = task;
         else {
           found.column.tasks.splice(found.index, 1);
-          target.tasks.push(structuredClone(action.task));
+          target.tasks.push(task);
         }
+        if (target.kind === "done" && fromKind !== "done")
+          spawnRecurringTask(board, task);
         break;
       }
       case "task.move": {
         if (action.beforeId === action.id) break;
         const found = required(findTask(board, action.id));
+        const fromKind = found.column.kind;
         const target = required(
           board.columns.find((c) => c.id === action.columnId),
         );
@@ -232,6 +260,8 @@ export function applyAction(previous: Workspace, action: Action): Workspace {
             : target.tasks.findIndex((t) => t.id === action.beforeId);
         if (to < 0) throw Error("Позиция переноса больше не существует");
         target.tasks.splice(to, 0, found.task);
+        if (target.kind === "done" && fromKind !== "done")
+          spawnRecurringTask(board, found.task);
         break;
       }
       case "task.delete": {
@@ -261,6 +291,20 @@ export function applyAction(previous: Workspace, action: Action): Workspace {
   }
   validateWorkspace(state);
   return state;
+}
+function spawnRecurringTask(board: Board, completed: Task) {
+  if (!isRecurrence(completed.recurrence)) return;
+  const recurrence = completed.recurrence;
+  const next: Task = {
+    ...structuredClone(completed),
+    id: uid(),
+    timeSpentMs: undefined,
+    reminderAt: nextOccurrence(completed.reminderAt ?? Date.now(), recurrence),
+  };
+  delete completed.recurrence;
+  const todo =
+    board.columns.find((column) => column.kind === "todo") ?? board.columns[0];
+  todo.tasks.unshift(next);
 }
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -325,7 +369,11 @@ export function validateBoard(
       if (++counter.tasks > 10000)
         throw Error("Превышен предел 10 000 карточек");
       const t = object(item);
-      keys(t, ["id", "title", "description", "label", "color", "priority"]);
+      keys(
+        t,
+        ["id", "title", "description", "label", "color", "priority"],
+        ["timeSpentMs", "recurrence", "reminderAt", "linkedDocId"],
+      );
       id(t.id);
       text(t.title, 300, true);
       text(t.description, 20000);
@@ -335,6 +383,28 @@ export function validateBoard(
         !["high", "medium", "low"].includes(t.priority as string)
       )
         throw Error("Неверная метка или приоритет");
+      if (t.timeSpentMs !== undefined) {
+        if (
+          typeof t.timeSpentMs !== "number" ||
+          !Number.isSafeInteger(t.timeSpentMs) ||
+          t.timeSpentMs < 0 ||
+          t.timeSpentMs > 10 * 365 * 24 * 60 * 60 * 1000
+        )
+          throw Error("Некорректный учёт времени");
+      }
+      if (t.recurrence !== undefined && t.recurrence !== null && !isRecurrence(t.recurrence))
+        throw Error("Некорректное повторение задачи");
+      if (
+        t.reminderAt !== undefined &&
+        t.reminderAt !== null &&
+        (typeof t.reminderAt !== "number" || !Number.isFinite(t.reminderAt))
+      )
+        throw Error("Некорректное напоминание");
+      if (t.linkedDocId !== undefined && t.linkedDocId !== null) {
+        text(t.linkedDocId, 100, true);
+        if (!/^[a-zA-Z0-9_-]+$/.test(t.linkedDocId as string))
+          throw Error("Некорректная связь с документом");
+      }
     }
   });
 }
@@ -454,21 +524,79 @@ export function exampleBoard(): Board {
   return b;
 }
 
-export function workspaceBackup(workspace: Workspace): WorkspaceBackup {
+function validateBackupDocument(value: unknown): asserts value is BackupDocument {
+  const doc = object(value);
+  keys(
+    doc,
+    ["id", "title", "markdown", "revision"],
+    ["folderId", "linkedCardId"],
+  );
+  text(doc.id, 100, true);
+  if (!/^[a-zA-Z0-9_-]+$/.test(doc.id as string))
+    throw Error("Некорректный идентификатор документа");
+  text(doc.title, 200, true);
+  text(doc.markdown, 2 * 1024 * 1024);
+  if (
+    typeof doc.revision !== "number" ||
+    !Number.isSafeInteger(doc.revision) ||
+    doc.revision < 0
+  )
+    throw Error("Некорректная версия документа");
+  if (doc.folderId != null) text(doc.folderId, 100, true);
+  if (doc.linkedCardId != null) text(doc.linkedCardId, 100, true);
+}
+
+function validateBackupFolder(value: unknown): asserts value is BackupFolder {
+  const folder = object(value);
+  keys(folder, ["id", "name", "revision"], ["parentId"]);
+  text(folder.id, 100, true);
+  text(folder.name, 80, true);
+  if (
+    typeof folder.revision !== "number" ||
+    !Number.isSafeInteger(folder.revision) ||
+    folder.revision < 0
+  )
+    throw Error("Некорректная версия папки");
+  if (folder.parentId != null) text(folder.parentId, 100, true);
+}
+
+export function workspaceBackup(
+  workspace: Workspace,
+  extra?: { documents?: BackupDocument[]; folders?: BackupFolder[] },
+): WorkspaceBackup {
   validateWorkspace(workspace);
+  const documents = extra?.documents ?? [];
+  const folders = extra?.folders ?? [];
+  for (const doc of documents) validateBackupDocument(doc);
+  for (const folder of folders) validateBackupFolder(folder);
+  const withDocs = extra !== undefined;
   return {
     format: "sreda-backup",
-    version: 1,
+    version: withDocs ? 2 : 1,
     workspace: structuredClone(workspace),
+    ...(withDocs
+      ? {
+          documents: structuredClone(documents),
+          folders: structuredClone(folders),
+        }
+      : {}),
   };
 }
 
 export function parseWorkspaceBackup(value: unknown): WorkspaceBackup {
   const file = object(value);
-  keys(file, ["format", "version", "workspace"]);
-  if (file.format !== "sreda-backup" || file.version !== 1)
-    throw Error("Ожидался файл резервной копии Среда версии 1");
+  keys(file, ["format", "version", "workspace"], ["documents", "folders"]);
+  if (file.format !== "sreda-backup" || (file.version !== 1 && file.version !== 2))
+    throw Error("Ожидался файл резервной копии Среда версии 1 или 2");
   validateWorkspace(file.workspace);
+  const documents = file.documents ?? [];
+  const folders = file.folders ?? [];
+  if (!Array.isArray(documents) || !Array.isArray(folders))
+    throw Error("Некорректный список документов в копии");
+  if (documents.length > 5000 || folders.length > 1000)
+    throw Error("В копии слишком много документов");
+  for (const doc of documents) validateBackupDocument(doc);
+  for (const folder of folders) validateBackupFolder(folder);
   return file as WorkspaceBackup;
 }
 

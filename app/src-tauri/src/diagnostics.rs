@@ -30,7 +30,7 @@ pub fn verify(context: &tauri::Context<tauri::Wry>, report: &Path) -> Result<(),
     if db.exists(){return Err("Diagnostic database already exists".into())}
     let result: Result<serde_json::Value, String>=(||{
         let mut snapshot=storage::load(&db)?;
-        let board=Board{id:"check-board".into(),name:"Проверка автономного запуска".into(),description:"".into(),columns:vec![Column{id:"check-column".into(),name:"Нужно сделать".into(),kind:Some(ColumnKind::Todo),tasks:vec![Task{id:"check-task".into(),title:"SQLite внутри exe".into(),description:"Тестовая запись".into(),label:"".into(),color:"sage".into(),priority:"medium".into()}]}]};
+        let board=Board{id:"check-board".into(),name:"Проверка автономного запуска".into(),description:"".into(),columns:vec![Column{id:"check-column".into(),name:"Нужно сделать".into(),kind:Some(ColumnKind::Todo),tasks:vec![Task{id:"check-task".into(),title:"SQLite внутри exe".into(),description:"Тестовая запись".into(),label:"".into(),color:"sage".into(),priority:"medium".into(),time_spent_ms:0,recurrence:None,reminder_at:None,linked_doc_id:None}]}]};
         snapshot.workspace.selected_board_id=Some(board.id.clone());snapshot.workspace.boards.push(board);
         let revision=storage::save(&db,&snapshot.workspace,snapshot.revision)?;
         let reopened=storage::load(&db)?;
